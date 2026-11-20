@@ -1,0 +1,105 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://rusolve.dev/schema/rusolve-help-1.schema.json",
+  "title": "rusolve.help/1",
+  "description": "The machine-readable command schema `rusolve --help --json` prints. `rusolve <command> --help --json` prints the same object with the one command in `commands`. Generated from the command registry in crates/rusolve-cli/src/commands.rs; the HiGHS option names behind --opt are not copied here but listed by `rusolve options --json`.",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "name",
+    "version",
+    "commands",
+    "exit_codes",
+    "options",
+    "environment"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": { "const": "rusolve.help/1" },
+    "name": { "const": "rusolve" },
+    "version": {
+      "description": "The rusolve-cli crate version (CARGO_PKG_VERSION).",
+      "type": "string"
+    },
+    "commands": {
+      "description": "Every subcommand, in the order `rusolve --help` lists them.",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name", "summary", "usage", "positionals", "flags", "output_schema"],
+        "additionalProperties": false,
+        "properties": {
+          "name": { "type": "string" },
+          "summary": { "description": "One line.", "type": "string" },
+          "usage": { "description": "The first line of `rusolve <name> --help`.", "type": "string" },
+          "positionals": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["name", "description", "required"],
+              "additionalProperties": false,
+              "properties": {
+                "name": { "type": "string" },
+                "description": { "type": "string" },
+                "required": { "type": "boolean" }
+              }
+            }
+          },
+          "flags": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["name", "value", "type", "default", "description", "stack", "repeatable"],
+              "additionalProperties": false,
+              "properties": {
+                "name": { "description": "The flag, with its leading dashes.", "type": "string", "pattern": "^--" },
+                "value": {
+                  "description": "The placeholder of the value it takes (`SECONDS`, `text|json`), or null for a switch.",
+                  "type": ["string", "null"]
+                },
+                "type": {
+                  "description": "The kind of its value, as `commands::ValueKind` and `commands::parse_flags` check it: the same fact as `value` in machine-readable form. A `Choice` lists its values in `choices` and in `value`, joined by `|`.",
+                  "enum": ["switch", "int", "uint", "float", "path", "text", "choice", "key=value"]
+                },
+                "choices": {
+                  "description": "The values a `choice` flag accepts, in the order `--help` lists them. Only on a `choice` flag.",
+                  "type": "array",
+                  "items": { "type": "string" },
+                  "minItems": 1
+                },
+                "default": {
+                  "description": "The documented default value, or null when there is none or it depends on the model.",
+                  "type": ["string", "null"]
+                },
+                "description": { "type": "string" },
+                "stack": {
+                  "description": "Which solver stack honours the flag. 'both' flags mean the same on the HiGHS port and on the native stack; a flag of the other stack is a usage error (exit 2) that names the stack.",
+                  "enum": ["both", "port", "native"]
+                },
+                "repeatable": { "type": "boolean" }
+              }
+            }
+          },
+          "output_schema": {
+            "description": "The schema_version of the command's JSON output (`--format json`), or null when it has none.",
+            "type": ["string", "null"]
+          }
+        }
+      }
+    },
+    "exit_codes": {
+      "description": "The exit-code table, the same for every command, keyed by code.",
+      "type": "object",
+      "required": ["0", "2", "3", "4"],
+      "additionalProperties": { "type": "string" }
+    },
+    "options": {
+      "description": "The command that lists the HiGHS options `--opt` accepts.",
+      "type": "string"
+    },
+    "environment": {
+      "description": "The command that lists the environment variables the solver reads.",
+      "type": "string"
+    }
+  }
+}

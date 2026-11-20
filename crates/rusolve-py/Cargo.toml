@@ -1,0 +1,25 @@
+[package]
+name = "rusolve-py"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Python bindings (PyO3, abi3-py311): the rusolve.Model API (docs/design/python-api.md) and the highspy-shaped Highs class"
+
+[lib]
+name = "_rusolve"
+crate-type = ["cdylib"]
+
+[dependencies]
+rusolve-core.workspace = true
+rusolve-io.workspace = true
+rusolve-model.workspace = true
+rusolve-ekk.workspace = true
+# The diagnostic cores and the result envelope (`rusolve_cli::api`)
+rusolve-cli = { path = "../rusolve-cli" }
+serde = "1"
+serde_json = "1"
+pyo3 = { version = "0.28", features = ["abi3-py311", "extension-module"] }
+
+[build-dependencies]
+pyo3-build-config = "0.28"

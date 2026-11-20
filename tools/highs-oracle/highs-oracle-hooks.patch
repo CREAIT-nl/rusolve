@@ -1,0 +1,397 @@
+--- a/highs/simplex/HEkk.cpp
++++ b/highs/simplex/HEkk.cpp
+@@ -20,6 +20,7 @@
+ #include "simplex/HSimplexDebug.h"
+ #include "simplex/HSimplexReport.h"
+ #include "simplex/SimplexTimer.h"
++#include "simplex/HighsOracleHook.h"
+ 
+ using std::fabs;
+ using std::max;
+@@ -1012,7 +1013,9 @@
+ 
+   previous_iteration_cycling_detected = -kHighsIInf;
+ 
++  HIGHS_ORACLE_EKK(kOracleEkkSolveEnter);
+   initialiseForSolve();
++  HIGHS_ORACLE_EKK(kOracleEkkSolveInitialised);
+ 
+   const HighsDebugStatus simplex_nla_status =
+       simplex_nla_.debugCheckData("Before HEkk::solve()");
+@@ -2050,6 +2053,7 @@
+   info_.update_count = 0;
+ 
+   simplex_stats_.num_invert++;
++  HIGHS_ORACLE_EKK(kOracleEkkComputeFactor);
+   return rank_deficiency;
+ }
+ 
+@@ -3472,6 +3476,7 @@
+ }
+ 
+ HighsStatus HEkk::returnFromEkkSolve(const HighsStatus return_status) {
++  HIGHS_ORACLE_EKK(kOracleEkkSolveExit);
+   if (analysis_.analyse_simplex_time)
+     analysis_.simplexTimerStop(SimplexTotalClock);
+   // Restore any modified development or timing settings and analyse
+--- a/highs/simplex/HEkkDual.cpp
++++ b/highs/simplex/HEkkDual.cpp
+@@ -22,6 +22,7 @@
+ #include "parallel/HighsParallel.h"
+ #include "simplex/HEkkPrimal.h"
+ #include "simplex/SimplexTimer.h"
++#include "simplex/HighsOracleHook.h"
+ 
+ using std::fabs;
+ 
+@@ -209,6 +210,7 @@
+       HighsDebugStatus::kLogicalError)
+     return ekk_instance_.returnFromSolve(HighsStatus::kError);
+   //
++  HIGHS_ORACLE_DUAL(kOracleSolveStart);
+   // The major solving loop
+   //
+   while (solve_phase) {
+@@ -242,6 +244,7 @@
+       // Phase 1
+       analysis->simplexTimerStart(SimplexDualPhase1Clock);
+       solvePhase1();
++      HIGHS_ORACLE_DUAL(kOraclePhaseEnd);
+       analysis->simplexTimerStop(SimplexDualPhase1Clock);
+       info.dual_phase1_iteration_count +=
+           (ekk_instance_.iteration_count_ - it0);
+@@ -249,6 +252,7 @@
+       // Phase 2
+       analysis->simplexTimerStart(SimplexDualPhase2Clock);
+       solvePhase2();
++      HIGHS_ORACLE_DUAL(kOraclePhaseEnd);
+       analysis->simplexTimerStop(SimplexDualPhase2Clock);
+       info.dual_phase2_iteration_count +=
+           (ekk_instance_.iteration_count_ - it0);
+@@ -618,7 +622,9 @@
+   analysis->simplexTimerStart(IterateClock);
+   for (;;) {
+     analysis->simplexTimerStart(IterateDualRebuildClock);
++    HIGHS_ORACLE_DUAL(kOracleRebuildEnter);
+     rebuild();
++    HIGHS_ORACLE_DUAL(kOracleRebuild);
+     analysis->simplexTimerStop(IterateDualRebuildClock);
+     if (solve_phase == kSolvePhaseError) {
+       model_status = HighsModelStatus::kSolveError;
+@@ -648,6 +654,7 @@
+           iterateMulti();
+           break;
+       }
++      HIGHS_ORACLE_DUAL(kOracleIterate);
+       if (ekk_instance_.bailout()) break;
+       assert(solve_phase != kSolvePhaseTabooBasis);
+       if (rebuild_reason) break;
+@@ -879,7 +886,9 @@
+     // Outer loop of solvePhase2()
+     // Rebuild all values, reinverting B if updates have been performed
+     analysis->simplexTimerStart(IterateDualRebuildClock);
++    HIGHS_ORACLE_DUAL(kOracleRebuildEnter);
+     rebuild();
++    HIGHS_ORACLE_DUAL(kOracleRebuild);
+     analysis->simplexTimerStop(IterateDualRebuildClock);
+     if (solve_phase == kSolvePhaseError) {
+       model_status = HighsModelStatus::kSolveError;
+@@ -913,6 +922,7 @@
+           iterateMulti();
+           break;
+       }
++      HIGHS_ORACLE_DUAL(kOracleIterate);
+       if (ekk_instance_.bailout()) break;
+       if (bailoutOnDualObjective()) break;
+       assert(solve_phase != kSolvePhaseTabooBasis);
+@@ -1180,6 +1190,7 @@
+       ekk_instance_.computeSimplexLpDualInfeasible();
+     reportRebuild(kRebuildReasonCleanup);
+   }
++  HIGHS_ORACLE_DUAL(kOracleCleanup);
+ }
+ 
+ void HEkkDual::iterate() {
+--- a/highs/simplex/HEkkPrimal.cpp
++++ b/highs/simplex/HEkkPrimal.cpp
+@@ -9,6 +9,7 @@
+  * @brief
+  */
+ #include "simplex/HEkkPrimal.h"
++#include "simplex/HighsOracleHook.h"
+ 
+ #include "../extern/pdqsort/pdqsort.h"
+ #include "simplex/HEkkDual.h"
+@@ -136,6 +137,7 @@
+   // initialise records for primal correction reporting
+   localReportIter(true);
+   correctPrimal(true);
++  HIGHS_ORACLE_PRIMAL(kOracleSolveStart);
+   while (solve_phase) {
+     HighsInt it0 = ekk_instance_.iteration_count_;
+     // When starting a new phase the (updated) primal objective function
+@@ -178,6 +180,7 @@
+       //
+       // solve_phase = kSolvePhaseError is set if an error occurs
+       solvePhase1();
++      HIGHS_ORACLE_PRIMAL(kOraclePhaseEnd);
+       assert(solve_phase == kSolvePhase1 || solve_phase == kSolvePhase2 ||
+              solve_phase == kSolvePhaseUnknown ||
+              solve_phase == kSolvePhaseExit ||
+@@ -212,6 +215,7 @@
+       //
+       // solve_phase = kSolvePhaseError is set if an error occurs
+       solvePhase2();
++      HIGHS_ORACLE_PRIMAL(kOraclePhaseEnd);
+       assert(solve_phase == kSolvePhaseOptimal || solve_phase == kSolvePhase1 ||
+              solve_phase == kSolvePhase2 ||
+              solve_phase == kSolvePhaseOptimalCleanup ||
+@@ -443,7 +447,9 @@
+     // Rebuild
+     //
+     // solve_phase = kSolvePhaseError is set if the basis matrix is singular
++    HIGHS_ORACLE_PRIMAL(kOracleRebuildEnter);
+     rebuild();
++    HIGHS_ORACLE_PRIMAL(kOracleRebuild);
+     if (solve_phase == kSolvePhaseError) return;
+     if (solve_phase == kSolvePhaseUnknown) return;
+     if (ekk_instance_.bailout()) return;
+@@ -455,6 +461,7 @@
+ 
+     for (;;) {
+       iterate();
++      HIGHS_ORACLE_PRIMAL(kOracleIterate);
+       if (ekk_instance_.bailout()) return;
+       if (solve_phase == kSolvePhaseError) return;
+       assert(solve_phase == kSolvePhase1);
+@@ -539,7 +546,9 @@
+     // Rebuild
+     //
+     // solve_phase = kSolvePhaseError is set if the basis matrix is singular
++    HIGHS_ORACLE_PRIMAL(kOracleRebuildEnter);
+     rebuild();
++    HIGHS_ORACLE_PRIMAL(kOracleRebuild);
+     if (solve_phase == kSolvePhaseError) return;
+     if (solve_phase == kSolvePhaseUnknown) return;
+     if (ekk_instance_.bailout()) return;
+@@ -551,6 +560,7 @@
+ 
+     for (;;) {
+       iterate();
++      HIGHS_ORACLE_PRIMAL(kOracleIterate);
+       if (ekk_instance_.bailout()) return;
+       if (solve_phase == kSolvePhaseError) return;
+       assert(solve_phase == kSolvePhase2);
+@@ -681,6 +691,7 @@
+   //    computeSimplexLpDualInfeasible(ekk_instance_);
+   reportRebuild(kRebuildReasonCleanup);
+   //  }
++  HIGHS_ORACLE_PRIMAL(kOracleCleanup);
+ }
+ 
+ void HEkkPrimal::rebuild() {
+--- a/highs/simplex/HEkkPrimal.h
++++ b/highs/simplex/HEkkPrimal.h
+@@ -112,6 +112,7 @@
+   bool isBadBasisChange();
+ 
+   // References:
++  friend struct HighsOracleAccess;  // rusolve oracle instrumentation
+   HEkk& ekk_instance_;
+ 
+   // Pointers:
+--- a/highs/simplex/HSimplexNla.h
++++ b/highs/simplex/HSimplexNla.h
+@@ -153,6 +153,7 @@
+   friend class HEkk;
+   friend class HEkkPrimal;
+   friend class HEkkDual;
++  friend struct HighsOracleAccess;  // rusolve oracle instrumentation
+ };
+ 
+ #endif /* HSIMPLEXNLA_H_ */
+--- /dev/null
++++ b/highs/simplex/HighsOracleHook.h
+@@ -0,0 +1,49 @@
++/* rusolve oracle instrumentation -- NOT part of upstream HiGHS.
++ *
++ * Added by tools/highs-oracle/highs-oracle-hooks.patch. Defines a process-wide
++ * table of observer callbacks that the patched HEkk / HEkkDual / HEkkPrimal
++ * call at fixed points. All hooks are null by default, in which case the
++ * patched library behaves exactly like upstream HiGHS: a hook only reads
++ * solver state, it never changes it.
++ */
++#ifndef SIMPLEX_HIGHSORACLEHOOK_H_
++#define SIMPLEX_HIGHSORACLEHOOK_H_
++
++class HEkk;
++class HEkkDual;
++class HEkkPrimal;
++
++// HEkk events
++const int kOracleEkkSolveEnter = 0;        // HEkk::solve, before initialiseForSolve
++const int kOracleEkkSolveInitialised = 1;  // HEkk::solve, after initialiseForSolve
++const int kOracleEkkSolveExit = 2;         // HEkk::returnFromEkkSolve
++const int kOracleEkkComputeFactor = 3;     // HEkk::computeFactor, after INVERT
++// HEkkDual / HEkkPrimal events
++const int kOracleSolveStart = 10;  // phase decided, before the major loop
++const int kOracleRebuild = 11;     // after each rebuild()
++const int kOracleIterate = 12;     // after each iterate()
++const int kOracleCleanup = 13;     // end of cleanup()
++const int kOraclePhaseEnd = 14;    // after solvePhase1()/solvePhase2() returns
++const int kOracleRebuildEnter = 15;  // immediately before each rebuild()
++
++struct HighsOracleHooks {
++  void (*ekk)(int event, HEkk& ekk) = nullptr;
++  void (*dual)(int event, HEkkDual& dual) = nullptr;
++  void (*primal)(int event, HEkkPrimal& primal) = nullptr;
++};
++
++// Function-local static in an inline function: one instance per program
++// (C++11, no inline variables needed).
++inline HighsOracleHooks& highsOracleHooks() {
++  static HighsOracleHooks hooks;
++  return hooks;
++}
++
++#define HIGHS_ORACLE_EKK(event) \
++  do { if (highsOracleHooks().ekk) highsOracleHooks().ekk(event, *this); } while (0)
++#define HIGHS_ORACLE_DUAL(event) \
++  do { if (highsOracleHooks().dual) highsOracleHooks().dual(event, *this); } while (0)
++#define HIGHS_ORACLE_PRIMAL(event) \
++  do { if (highsOracleHooks().primal) highsOracleHooks().primal(event, *this); } while (0)
++
++#endif
+--- a/highs/mip/HighsLpRelaxation.cpp
++++ b/highs/mip/HighsLpRelaxation.cpp
+@@ -12,6 +12,7 @@
+ #include "lp_data/HighsSolve.h"  // For useIpm()
+ #include "mip/HighsCutPool.h"
+ #include "mip/HighsDomain.h"
++#include "mip/HighsOracleAcDump.h"  // rusolve oracle instrumentation
+ #include "mip/HighsMipSolver.h"
+ #include "mip/HighsMipSolverData.h"
+ #include "mip/HighsMipWorker.h"
+@@ -1417,6 +1418,21 @@
+           ipm.setOptionValue("solver", kIpxString);
+           mipsolver.profiling_->solveCall("LP4", mipsolver.submip);
+           ipm.optimizeLp();
++        }
++        // rusolve oracle: record the IPM result (basis after crossover, and
++        // the solution) that the fallback hands to the simplex.
++        if (std::FILE* f = highsOracleAcBegin(
++                "lp_ipm", mipsolver.submip, mipsolver.submip_level,
++                static_cast<int>(ipm.getModelStatus()))) {
++          std::string solver_now;
++          ipm.getOptionValue("solver", solver_now);
++          std::fprintf(f, ",\"ipm_solver\":\"%s\",\"basis_valid\":%d",
++                       solver_now.c_str(), ipm.getBasis().valid ? 1 : 0);
++          highsOracleAcInts(f, "col_status", ipm.getBasis().col_status);
++          highsOracleAcInts(f, "row_status", ipm.getBasis().row_status);
++          highsOracleAcDoubles(f, "col_value", ipm.getSolution().col_value);
++          highsOracleAcDoubles(f, "row_value", ipm.getSolution().row_value);
++          highsOracleAcEnd(f);
+         }
+         lpsolver.setBasis(ipm.getBasis(), "HighsLpRelaxation::run IPM basis");
+         return run(false);
+--- a/highs/mip/HighsMipSolverData.cpp
++++ b/highs/mip/HighsMipSolverData.cpp
+@@ -12,6 +12,7 @@
+ 
+ #include "../extern/pdqsort/pdqsort.h"
+ #include "lp_data/HighsModelUtils.h"
++#include "mip/HighsOracleAcDump.h"  // rusolve oracle instrumentation
+ #include "mip/HighsPseudocost.h"
+ #include "mip/HighsRedcostFixing.h"
+ #include "mip/MipTimer.h"
+@@ -480,6 +481,16 @@
+       ipm.setOptionValue("solver", kIpxString);
+       ipm.optimizeLp();
+     }
++    // rusolve oracle: record the IPM result on both paths; "stored" tells
++    // whether analyticCenterStatus / analyticCenter are assigned below.
++    if (std::FILE* f = highsOracleAcBegin(
++            "ac", mipsolver.submip, mipsolver.submip_level,
++            static_cast<int>(ipm.getModelStatus()))) {
++      std::fprintf(f, ",\"stored\":%d",
++                   HighsInt(sol.size()) == mipsolver.numCol() ? 1 : 0);
++      highsOracleAcDoubles(f, "centre", sol);
++      highsOracleAcEnd(f);
++    }
+     if (HighsInt(sol.size()) != mipsolver.numCol()) return;
+     analyticCenterStatus = ipm.getModelStatus();
+     analyticCenter = sol;
+--- /dev/null
++++ b/highs/mip/HighsOracleAcDump.h
+@@ -0,0 +1,71 @@
++/* rusolve oracle instrumentation -- NOT part of upstream HiGHS.
++ *
++ * Added by tools/highs-oracle/highs-oracle-hooks.patch. When the environment
++ * variable HIGHS_ORACLE_AC_DUMP names a file, the patched HiGHS MIP code
++ * appends one JSON line per IPM result (analytic centre, and the LP
++ * relaxation's IPM fallback) so that the Rust port can replay them. Records
++ * are described in tools/highs-oracle/FORMAT.md ("ac" and "lp_ipm"). The file
++ * is truncated by the first record of the process. Without the variable,
++ * nothing is written. The functions only read solver state.
++ */
++#ifndef MIP_HIGHSORACLEACDUMP_H_
++#define MIP_HIGHSORACLEACDUMP_H_
++
++#include <cstdio>
++#include <cstdlib>
++#include <vector>
++
++// The dump file, or nullptr when HIGHS_ORACLE_AC_DUMP is unset.
++inline std::FILE* highsOracleAcFile() {
++  static std::FILE* file = nullptr;
++  static bool opened = false;
++  if (!opened) {
++    opened = true;
++    const char* path = std::getenv("HIGHS_ORACLE_AC_DUMP");
++    if (path != nullptr && path[0] != '\0') file = std::fopen(path, "w");
++  }
++  return file;
++}
++
++// Starts a record: {"t":<tag>,"call":<n>,"submip":<0|1>,"submip_level":<l>,
++// "model_status":<s>. The caller appends fields and then calls
++// highsOracleAcEnd. Returns nullptr when dumping is off. `call` counts the
++// records of the process in emission order.
++inline std::FILE* highsOracleAcBegin(const char* tag, bool submip,
++                                     long long submip_level,
++                                     int model_status) {
++  std::FILE* f = highsOracleAcFile();
++  if (f == nullptr) return nullptr;
++  static long long call_index = 0;
++  std::fprintf(f,
++               "{\"t\":\"%s\",\"call\":%lld,\"submip\":%d,"
++               "\"submip_level\":%lld,\"model_status\":%d",
++               tag, call_index++, submip ? 1 : 0, submip_level, model_status);
++  return f;
++}
++
++inline void highsOracleAcEnd(std::FILE* f) {
++  std::fputs("}\n", f);
++  std::fflush(f);
++}
++
++// ,"<key>":["0x1.8p+1",...] with %a (exact hexfloat, sign of zero kept).
++inline void highsOracleAcDoubles(std::FILE* f, const char* key,
++                                 const std::vector<double>& v) {
++  std::fprintf(f, ",\"%s\":[", key);
++  for (size_t i = 0; i < v.size(); ++i)
++    std::fprintf(f, "%s\"%a\"", i == 0 ? "" : ",", v[i]);
++  std::fputc(']', f);
++}
++
++// ,"<key>":[1,0,...] for enums and integers (converted with static_cast<int>).
++template <typename T>
++inline void highsOracleAcInts(std::FILE* f, const char* key,
++                              const std::vector<T>& v) {
++  std::fprintf(f, ",\"%s\":[", key);
++  for (size_t i = 0; i < v.size(); ++i)
++    std::fprintf(f, "%s%d", i == 0 ? "" : ",", static_cast<int>(v[i]));
++  std::fputc(']', f);
++}
++
++#endif

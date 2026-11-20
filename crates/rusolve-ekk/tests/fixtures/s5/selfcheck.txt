@@ -1,0 +1,47 @@
+# mip-heuristics fixture self-check: the "off" oracle run vs rusolve with FJ off.
+# oracle  = patched mip-heuristics 36f7d9d build, CMAKE_CXX_FLAGS and CMAKE_C_FLAGS = -ffp-contract=off,
+#           mip_trace with threads=1 log_dev_level=3 mip_heuristic_run_feasibility_jump=false
+#           mip_heuristic_fj_effort=0 mip_heuristic_fpr_effort=0 mip_heuristic_local_mip_effort=0
+# rusolve = rusolve-cli mip-trace <mps> threads=1 log_dev_level=3 mip_heuristic_run_feasibility_jump=false
+# stock   = target/highs-oracle/build/mip_trace (unpatched reference/HiGHS 1.15.1), FJ off, where checked
+# trace = full cb/sol/final line comparison. MATCH requires equal final obj/status/nodes.
+e2e_knap MATCH
+  trace oracle==rusolve
+  oracle  status=Optimal obj=-417.00000000000074 nodes=1 lp_iters=24
+  rusolve status=Optimal obj=-417.00000000000074 nodes=1 lp_iters=24
+e2e_setcover MATCH
+  trace oracle==rusolve
+  oracle  status=Optimal obj=26 nodes=1 lp_iters=9
+  rusolve status=Optimal obj=26 nodes=1 lp_iters=9
+e2e_facility MATCH
+  trace oracle==rusolve
+  oracle  status=Optimal obj=329 nodes=1 lp_iters=43
+  rusolve status=Optimal obj=329 nodes=1 lp_iters=43
+pg MATCH
+  trace oracle==rusolve
+  oracle  status=Optimal obj=-8674.342607117027 nodes=27 lp_iters=34191
+  rusolve status=Optimal obj=-8674.342607117027 nodes=27 lp_iters=34191
+markshare_4_0 MISMATCH trace-exempt (pre-existing rusolve divergence vs stock HiGHS on this build)
+  trace oracle!=rusolve; oracle==stock
+  oracle  status=Optimal obj=1 nodes=978566 lp_iters=2624358
+  rusolve status=Optimal obj=0.99999999999998856 nodes=1113899 lp_iters=2996371
+  stock   status=Optimal obj=1 nodes=978566 lp_iters=2624358
+mas74 MATCH
+  trace oracle==rusolve; oracle==stock
+  oracle  status=Optimal obj=11801.185728933593 nodes=2948770 lp_iters=21642356
+  rusolve status=Optimal obj=11801.185728933593 nodes=2948770 lp_iters=21642356
+  stock   status=Optimal obj=11801.185728933593 nodes=2948770 lp_iters=21642356
+neos5 MISMATCH trace-exempt (pre-existing rusolve divergence vs stock HiGHS on this build)
+  trace oracle!=rusolve; oracle==stock
+  oracle  status=Optimal obj=14.999999999980458 nodes=197113 lp_iters=2556352
+  rusolve status=Optimal obj=14.999999999614371 nodes=313752 lp_iters=4902172
+  stock   status=Optimal obj=14.999999999980458 nodes=197113 lp_iters=2556352
+gen-ip002 MATCH
+  trace oracle==rusolve
+  oracle  status=Optimal obj=-4783.7333916000025 nodes=6286284 lp_iters=35123076
+  rusolve status=Optimal obj=-4783.7333916000025 nodes=6286284 lp_iters=35123076
+pk1 MISMATCH trace-exempt (pre-existing rusolve divergence vs stock HiGHS on this build)
+  trace oracle!=rusolve; oracle==stock
+  oracle  status=Optimal obj=10.999999999997463 nodes=656421 lp_iters=7225974
+  rusolve status=Optimal obj=11.000000000000146 nodes=521124 lp_iters=5696272
+  stock   status=Optimal obj=10.999999999997463 nodes=656421 lp_iters=7225974

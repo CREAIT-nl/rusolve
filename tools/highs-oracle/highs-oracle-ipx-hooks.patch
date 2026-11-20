@@ -1,0 +1,217 @@
+# rusolve highs-oracle IPX hooks (oracle (b) per-iteration IPX trace).
+# Applied with patch -p1 AFTER highs-oracle-hooks.patch; own stamp
+# target/highs-oracle/highs-src.ipx.stamp. See README.md / FORMAT.md.
+--- a/highs/ipm/ipx/ipm.cc
++++ b/highs/ipm/ipx/ipm.cc
+@@ -1,4 +1,5 @@
+ #include "ipm/ipx/ipm.h"
++#include "ipm/ipx/HighsOracleIpxDump.h"  // rusolve oracle instrumentation
+ #include <algorithm>
+ #include <cmath>
+ #include <cassert>
+@@ -26,8 +27,10 @@
+     info_ = info;
+     PrintHeader();
+     ComputeStartingPoint();
+-    if (info->errflag == 0)
++    if (info->errflag == 0) {
+         PrintOutput();
++        highsOracleIpxIter("start", *iterate_, *info_, *kkt_, step_primal_, step_dual_);
++    }
+     // Set status_ipm.
+     if (info->errflag == IPX_ERROR_user_interrupt) {
+         info->errflag = 0;
+@@ -99,6 +102,7 @@
+         MakeStep(step);
+         info->iter++;
+         PrintOutput();
++        highsOracleIpxIter("iter", *iterate_, *info_, *kkt_, step_primal_, step_dual_);
+     }
+ 
+     // Set status_ipm if errflag terminated IPM.
+@@ -165,6 +169,7 @@
+ 	  MakeStep(step, true);
+ 	  info->iter++;
+ 	  PrintOutput();
++	  highsOracleIpxIter("centring", *iterate_, *info_, *kkt_, step_primal_, step_dual_);
+ 	  AssessCentrality(iterate_->xl(), iterate_->xu(), iterate_->zl(),
+ 			   iterate_->zu(), iterate_->mu());
+ 	  prev_ratio = centring_ratio;
+@@ -189,6 +194,7 @@
+       info->centring_tried = true;
+     } // if (control_.runCentring() && info->status_ipm ==
+       // IPX_STATUS_optimal && !info->centring_tried)
++    highsOracleIpxInfo("driver_end", *info_);
+ }
+ 
+ void IPM::ComputeStartingPoint() {
+--- a/highs/ipm/ipx/lp_solver.cc
++++ b/highs/ipm/ipx/lp_solver.cc
+@@ -1,4 +1,5 @@
+ #include "ipm/ipx/lp_solver.h"
++#include "ipm/ipx/HighsOracleIpxDump.h"  // rusolve oracle instrumentation
+ #include <algorithm>
+ #include <cassert>
+ #include <vector>
+@@ -118,6 +119,7 @@
+       info_.status = IPX_STATUS_internal_error;
+     }
+     info_.time_total = control_.Elapsed();
++    highsOracleIpxInfo("solve_end", info_);
+     control_.Debug(2) << info_;
+     control_.CloseLogfile();
+     if (control_.reportBasisData())
+--- /dev/null
++++ b/highs/ipm/ipx/HighsOracleIpxDump.h
+@@ -0,0 +1,151 @@
++/* rusolve oracle instrumentation -- NOT part of upstream HiGHS.
++ *
++ * Added by tools/highs-oracle/highs-oracle-ipx-hooks.patch (applied after
++ * highs-oracle-hooks.patch, with its own stamp). When the environment
++ * variable HIGHS_ORACLE_IPX_DUMP names a file, the patched IPX appends one
++ * JSON line per IPM iteration (after every IPM::PrintOutput: the starting
++ * point, each Driver iteration, each centring step), one at the end of every
++ * IPM::Driver and one at the end of LpSolver::Solve. Records are described
++ * in tools/highs-oracle/FORMAT.md ("ipx/trace/<lp>.<cfg>.jsonl"). Doubles
++ * are the 16 hex digits of their bit pattern; vectors are FNV-1a 64 hashes.
++ * The file is truncated by the first record of the process. Without the
++ * variable nothing is written. The functions only read solver state (the
++ * Iterate getters they call were already evaluated by PrintOutput).
++ */
++#ifndef IPX_HIGHSORACLEIPXDUMP_H_
++#define IPX_HIGHSORACLEIPXDUMP_H_
++
++#include <cstdint>
++#include <cstdio>
++#include <cstdlib>
++#include <cstring>
++
++#include "ipm/ipx/ipx_info.h"
++#include "ipm/ipx/iterate.h"
++#include "ipm/ipx/kkt_solver.h"
++
++namespace ipx {
++
++// The dump file, or nullptr when HIGHS_ORACLE_IPX_DUMP is unset.
++inline std::FILE* highsOracleIpxFile() {
++  static std::FILE* file = nullptr;
++  static bool opened = false;
++  if (!opened) {
++    opened = true;
++    const char* path = std::getenv("HIGHS_ORACLE_IPX_DUMP");
++    if (path != nullptr && path[0] != '\0') file = std::fopen(path, "w");
++  }
++  return file;
++}
++
++inline void highsOracleIpxF(std::FILE* f, const char* key, double v) {
++  uint64_t bits;
++  std::memcpy(&bits, &v, 8);
++  std::fprintf(f, ",\"%s\":\"%016llx\"", key, (unsigned long long)bits);
++}
++
++inline void highsOracleIpxI(std::FILE* f, const char* key, long long v) {
++  std::fprintf(f, ",\"%s\":%lld", key, v);
++}
++
++// FNV-1a 64 over the little-endian bit patterns (FORMAT.md "Hashes").
++inline void highsOracleIpxH(std::FILE* f, const char* key, const Vector& v) {
++  uint64_t h = 0xcbf29ce484222325ULL;
++  for (size_t i = 0; i < v.size(); ++i) {
++    uint64_t bits;
++    std::memcpy(&bits, &v[i], 8);
++    for (int b = 0; b < 8; ++b) {
++      h ^= (bits >> (8 * b)) & 0xff;
++      h *= 0x100000001b3ULL;
++    }
++  }
++  std::fprintf(f, ",\"%s\":\"%016llx\"", key, (unsigned long long)h);
++}
++
++inline long long& highsOracleIpxCall() {
++  static long long call = 0;
++  return call;
++}
++
++// {"t":"ipm","call":<n>,"kind":"start|iter|centring", ...}
++inline void highsOracleIpxIter(const char* kind, const Iterate& it, const Info& info,
++                               const KKTSolver& kkt, double step_primal,
++                               double step_dual) {
++  std::FILE* f = highsOracleIpxFile();
++  if (f == nullptr) return;
++  std::fprintf(f, "{\"t\":\"ipm\",\"call\":%lld,\"kind\":\"%s\"", highsOracleIpxCall()++,
++               kind);
++  highsOracleIpxI(f, "iter", info.iter);
++  highsOracleIpxF(f, "mu", it.mu());
++  highsOracleIpxF(f, "step_primal", step_primal);
++  highsOracleIpxF(f, "step_dual", step_dual);
++  highsOracleIpxF(f, "presidual", it.presidual());
++  highsOracleIpxF(f, "dresidual", it.dresidual());
++  highsOracleIpxF(f, "pobjective", it.pobjective());
++  highsOracleIpxF(f, "dobjective", it.dobjective());
++  highsOracleIpxF(f, "pobjective_after_postproc", it.pobjective_after_postproc());
++  highsOracleIpxF(f, "dobjective_after_postproc", it.dobjective_after_postproc());
++  highsOracleIpxF(f, "complementarity", it.complementarity());
++  highsOracleIpxF(f, "mu_min", it.mu_min());
++  highsOracleIpxF(f, "mu_max", it.mu_max());
++  highsOracleIpxI(f, "kkt_iter", kkt.iter());
++  highsOracleIpxI(f, "basis_changes", kkt.basis_changes());
++  highsOracleIpxI(f, "kktiter1", info.kktiter1);
++  highsOracleIpxI(f, "kktiter2", info.kktiter2);
++  highsOracleIpxI(f, "updates_ipm", info.updates_ipm);
++  highsOracleIpxI(f, "primal_dropped", info.primal_dropped);
++  highsOracleIpxI(f, "dual_dropped", info.dual_dropped);
++  highsOracleIpxI(f, "errflag", info.errflag);
++  highsOracleIpxH(f, "h_x", it.x());
++  highsOracleIpxH(f, "h_xl", it.xl());
++  highsOracleIpxH(f, "h_xu", it.xu());
++  highsOracleIpxH(f, "h_y", it.y());
++  highsOracleIpxH(f, "h_zl", it.zl());
++  highsOracleIpxH(f, "h_zu", it.zu());
++  std::fputs("}\n", f);
++  std::fflush(f);
++}
++
++// {"t":"info","call":<n>,"kind":"driver_end|solve_end", <ipx::Info without
++// the time_* fields>}
++inline void highsOracleIpxInfo(const char* kind, const Info& info) {
++  std::FILE* f = highsOracleIpxFile();
++  if (f == nullptr) return;
++  std::fprintf(f, "{\"t\":\"info\",\"call\":%lld,\"kind\":\"%s\"", highsOracleIpxCall()++,
++               kind);
++#define HIGHS_ORACLE_IPX_I(x) highsOracleIpxI(f, #x, info.x);
++#define HIGHS_ORACLE_IPX_D(x) highsOracleIpxF(f, #x, info.x);
++  HIGHS_ORACLE_IPX_I(status) HIGHS_ORACLE_IPX_I(status_ipm)
++  HIGHS_ORACLE_IPX_I(status_crossover) HIGHS_ORACLE_IPX_I(errflag)
++  HIGHS_ORACLE_IPX_I(num_var) HIGHS_ORACLE_IPX_I(num_constr) HIGHS_ORACLE_IPX_I(num_entries)
++  HIGHS_ORACLE_IPX_I(num_rows_solver) HIGHS_ORACLE_IPX_I(num_cols_solver)
++  HIGHS_ORACLE_IPX_I(num_entries_solver) HIGHS_ORACLE_IPX_I(dualized)
++  HIGHS_ORACLE_IPX_I(dense_cols) HIGHS_ORACLE_IPX_I(centring_tried)
++  HIGHS_ORACLE_IPX_I(centring_success) HIGHS_ORACLE_IPX_I(dependent_rows)
++  HIGHS_ORACLE_IPX_I(dependent_cols) HIGHS_ORACLE_IPX_I(rows_inconsistent)
++  HIGHS_ORACLE_IPX_I(cols_inconsistent) HIGHS_ORACLE_IPX_I(primal_dropped)
++  HIGHS_ORACLE_IPX_I(dual_dropped)
++  HIGHS_ORACLE_IPX_D(abs_presidual) HIGHS_ORACLE_IPX_D(abs_dresidual)
++  HIGHS_ORACLE_IPX_D(rel_presidual) HIGHS_ORACLE_IPX_D(rel_dresidual)
++  HIGHS_ORACLE_IPX_D(pobjval) HIGHS_ORACLE_IPX_D(dobjval) HIGHS_ORACLE_IPX_D(rel_objgap)
++  HIGHS_ORACLE_IPX_D(complementarity) HIGHS_ORACLE_IPX_D(normx) HIGHS_ORACLE_IPX_D(normy)
++  HIGHS_ORACLE_IPX_D(normz) HIGHS_ORACLE_IPX_D(objval) HIGHS_ORACLE_IPX_D(primal_infeas)
++  HIGHS_ORACLE_IPX_D(dual_infeas)
++  HIGHS_ORACLE_IPX_I(iter) HIGHS_ORACLE_IPX_I(kktiter1) HIGHS_ORACLE_IPX_I(kktiter2)
++  HIGHS_ORACLE_IPX_I(basis_repairs) HIGHS_ORACLE_IPX_I(updates_start)
++  HIGHS_ORACLE_IPX_I(updates_ipm) HIGHS_ORACLE_IPX_I(updates_crossover)
++  HIGHS_ORACLE_IPX_D(ftran_sparse) HIGHS_ORACLE_IPX_D(btran_sparse)
++  HIGHS_ORACLE_IPX_D(mean_fill) HIGHS_ORACLE_IPX_D(max_fill)
++  HIGHS_ORACLE_IPX_I(maxvol_updates) HIGHS_ORACLE_IPX_I(maxvol_skipped)
++  HIGHS_ORACLE_IPX_I(maxvol_passes) HIGHS_ORACLE_IPX_I(tbl_nnz) HIGHS_ORACLE_IPX_D(tbl_max)
++  HIGHS_ORACLE_IPX_D(frobnorm_squared) HIGHS_ORACLE_IPX_D(lambdamax)
++  HIGHS_ORACLE_IPX_D(volume_increase)
++#undef HIGHS_ORACLE_IPX_I
++#undef HIGHS_ORACLE_IPX_D
++  std::fputs("}\n", f);
++  std::fflush(f);
++}
++
++}  // namespace ipx
++
++#endif

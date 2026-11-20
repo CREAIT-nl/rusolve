@@ -1,0 +1,20 @@
+# subsystem rules: the innermost frame matching any rule decides the sample; within one frame
+# the first rule in file order wins. Patterns are matched against lower-cased names with underscores removed, so
+# the Rust `ftran_u` and the C++ `ftranU` both read `ftranu`.
+ipm              ipx::|ipxsolve|solvelpipx|hipo|ipm::
+lp.factor_build  hfactor.*(build|setup|kernel|rankdef|invert|permute|pivot|sort|clear|finish|colelim|rowelim)|hekk.*(invert|computefactor|factor_solve)|hsimplexnla.*invert
+lp.factor_update hfactor.*update|hekk.*updatefactor|hsimplexnla.*update
+lp.ftran         ftran
+lp.btran         btran
+lp.price_row     hekkdualrow|highssparsematrix.*price|hekkdual.*(chooserow|choosecolumn|updatedual|updateprimal)|collectaj|priceby
+lp.dse_weights   dse|steepest|hekkdualrhs|computedualsteepest
+lp.simplex_other hekk|hsimplex|simplex::|hvector|happ|solvelpsimplex|hekkdual|hekkprimal|hsimplexnla
+lp.mgmt          highslprelaxation
+presolve         hpresolve|presolve
+conflict         conflict
+heur.fj          feasibilityjump|jumpmove|fjsolver
+cuts             highsseparat|cutgeneration|transformedlp|lpaggregator|cutpool|pathseparator|tableauseparator|modkseparator|separat
+heur.other       primalheuristics|rins|rens|submip|lpheur|randomizedrounding|shifting|rootreduced|trysolution
+domain           highsdomain|propagat
+cliques          cliquetable|implications|clique
+search           highssearch|pseudocost|nodequeue|highsmipsolver|mipsolverdata|mipworker

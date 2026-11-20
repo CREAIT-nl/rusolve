@@ -1,0 +1,868 @@
+# rusolve benchmark corpus manifest — read by re/bench/setup_corpus.py.
+#
+# Provenance and pins: see docs/re/bench-corpus-expansion.md and
+# benches/data/ATTRIBUTION.md. Materialized instances land in
+# benches/data/{lpopt,mip50}/ (gitignored): fetch, never commit.
+#
+# Schema (one [[instance]] per row):
+#   tier     = "lpopt" | "mip50"
+#   name     = instance name; materialized as benches/data/<tier>/<name>.mps
+#   group    = structural group (mip50 families / lpopt hard set), used as the
+#              family column by re/diff/mip_perf.py --tier mip50
+#   format   = "mps-bz2"  plain MPS in a .bz2        -> bz2-decode
+#              "mpc-bz2"  netlib MPC (compressed MPS) in a .bz2 -> bz2 | emps
+#              "mps-gz"   plain MPS in a .gz          -> gunzip
+#              "mps-gz-zip-entry" <name>.mps.gz inside a zip (zip+entry keys)
+#   url      = raw download URL (or zip = <url> + entry = <path-in-zip>)
+#   on-demand= true -> skipped by default setup runs (big/hard tier, fetch
+#              explicitly with --on-demand)
+#   sha256   = pin of the *raw downloaded* file. Empty -> computed at first
+#              fetch and written back here by setup_corpus.py (authoritative
+#              pin thereafter); mismatch on later fetches is a hard failure.
+#   size     = raw download size in bytes (pinned with sha256).
+
+[meta]
+cache = "~/.cache/rusolve-bench"
+emps_source = "https://www.netlib.org/lp/data/emps.c"
+# Alternate MIPLIB source if per-instance URLs ever disappear (verified
+# 2026-10-25: https://miplib.zib.de/downloads/benchmark.zip, 332,664,623 B).
+# Entries are "<instance>.mps.gz" at the zip root; format mps-gz-zip-entry.
+miplib_benchmark_zip = "https://miplib.zib.de/downloads/benchmark.zip"
+miplib_benchmark_zip_sha256 = "c756eefd544d83b31809306b45d3549a1a5b9378e6aa78b68738b1a3b6a418fa"
+
+# ---------------------------------------------------------------- lpopt core
+# Mittelmann LPopt LP set, https://plato.asu.edu/ftp/lptestset/ (+ misc/ nug/
+# pds/ rail/ fome/). Files named *.mps.bz2 are plain MPS after bunzip2; *.bz2
+# without .mps. are netlib MPC and need emps (compiled once into the cache).
+# Excluded on purpose: stat96v2/degme (no live host), shs1023/stp3d (only in
+# the miplib2010 zips), rail02 (already owned in benches/data/netlib).
+
+[[instance]]
+tier = "lpopt"
+name = "a2864"
+format = "mps-bz2"
+url = "https://plato.asu.edu/ftp/lptestset/a2864.mps.bz2"
+sha256 = "f97c2bbf584347f14a4ac6986c88475ea664fbd077aee99a5be9c35f21fad41a"
+size = 53077915
+
+[[instance]]
+tier = "lpopt"
+name = "bdry2"
+format = "mpc-bz2"
+url = "https://plato.asu.edu/ftp/lptestset/bdry2.bz2"
+sha256 = "f8a65391062e1f302b24ed8c52c85fbc032aef962b8889f5855490d0e3c82708"
+size = 3075981
+
+[[instance]]
+tier = "lpopt"
+name = "cont1"
+format = "mpc-bz2"
+url = "https://plato.asu.edu/ftp/lptestset/misc/cont1.bz2"
+sha256 = "c3443f67aefdead560caea30d5bd0d84607e5218716df05b0ab88f92cc595775"
+size = 1358181
+
+[[instance]]
+tier = "lpopt"
+name = "cont11"
+format = "mpc-bz2"
+url = "https://plato.asu.edu/ftp/lptestset/misc/cont11.bz2"
+sha256 = "62ec0dad1e26bf8a6be9a6d488d2e56c7ab0a191f27d81f1db338bf6cee71637"
+size = 1380663
+
+[[instance]]
+tier = "lpopt"
+name = "datt256_lp"
+format = "mps-bz2"
+url = "https://plato.asu.edu/ftp/lptestset/datt256_lp.mps.bz2"
+sha256 = "a59e35370bcb02f1e6bff7af195bfb6e14ade24800f9ebf64862ac66b7776104"
+size = 5055853
+
+[[instance]]
+tier = "lpopt"
+name = "dlr1"
+format = "mps-bz2"
+url = "https://plato.asu.edu/ftp/lptestset/dlr1.mps.bz2"
+sha256 = "0300780c3f3815fbf551d545c0a151a7bd9e31e24612abcc0a8ff19679124590"
+size = 50083237
+
+[[instance]]
+tier = "lpopt"
+name = "ex10"
+format = "mps-bz2"
+url = "https://plato.asu.edu/ftp/lptestset/ex10.mps.bz2"
+sha256 = "c6ef7ba5e1b4f57502993fcbbad4e9ba008c16e617c22562d1e08fb98406d89e"
+size = 4427438
+
+[[instance]]
+tier = "lpopt"
+name = "fhnw-binschedule1"
+format = "mps-bz2"
+url = "https://plato.asu.edu/ftp/lptestset/fhnw-binschedule1.mps.bz2"
+sha256 = "b9deea5bde2ca774d06557fae2b8fa3f389dd342465cfd55f86476dfa5565241"
+size = 33266390
+
+[[instance]]
+tier = "lpopt"
+name = "fome13"
+format = "mpc-bz2"
+url = "https://plato.asu.edu/ftp/lptestset/fome/fome13.bz2"
+sha256 = "a024471c4e229119c856d342fa472bc42ca1fe70f0938fd060928d48c21b41b6"
+size = 1175155
+
+[[instance]]
+tier = "lpopt"
+name = "graph40-40"
+format = "mps-bz2"
+url = "https://plato.asu.edu/ftp/lptestset/graph40-40.mps.bz2"
+sha256 = "879419be39f530996bea7711e16115c0d15057fcb3156599d81953cb6d5c6013"
+size = 5678502
+
+[[instance]]
+tier = "lpopt"
+name = "irish-electricity"
+format = "mps-bz2"
+url = "https://plato.asu.edu/ftp/lptestset/irish-electricity.mps.bz2"
+sha256 = "1c1c117d1fda3922e5aaff5cadb14581522f1b8b5dc6741cddc318cf1d9ae875"
+size = 1650055
+
+[[instance]]
+tier = "lpopt"
+name = "L1_sixm250obs"
+format = "mpc-bz2"
+url = "https://plato.asu.edu/ftp/lptestset/L1_sixm250obs.bz2"
+sha256 = "a473fdb2334cb29db9ca7f4955b1194419549b485a7df1e1c82ef97e82d86532"
+size = 12416262
+
+[[instance]]
+tier = "lpopt"
+name = "Linf_520c"
+format = "mpc-bz2"
+url = "https://plato.asu.edu/ftp/lptestset/Linf_520c.bz2"
+sha256 = "76b2547af1e7b982a133c885ba92aa7b6405ae4b2e3fc8e682cbd048888cf819"
+size = 1978708
+
+[[instance]]
+tier = "lpopt"
+name = "neos"
+format = "mpc-bz2"
+url = "https://plato.asu.edu/ftp/lptestset/misc/neos.bz2"
+sha256 = "2677d737bfb006257be6ba8c7e42d89d29b2e9d0616df0e40b7f64c98784e48d"
+size = 4346312
+
+[[instance]]
+tier = "lpopt"
+name = "neos3"
+format = "mpc-bz2"
+url = "https://plato.asu.edu/ftp/lptestset/misc/neos3.bz2"
+sha256 = "0177dc72e55a6380f10b7039b06bec2468631e8a62fd9237f2bcccf6ff8456d7"
+size = 3303132
+
+[[instance]]
+tier = "lpopt"
+name = "neos-3025225"
+format = "mps-bz2"
+url = "https://plato.asu.edu/ftp/lptestset/neos-3025225.mps.bz2"
+sha256 = "d60255ee6b76071ab12002775ca33245d0098dcbfcbef94b187f56d9fb5065bd"
+size = 12097366
+
+[[instance]]
+tier = "lpopt"
+name = "neos-5052403-cygnet"
+format = "mps-bz2"
+url = "https://plato.asu.edu/ftp/lptestset/neos-5052403-cygnet.mps.bz2"
+sha256 = "171d51bad7a0f457f92fdda864d0f3a9b9a52d3c5a7fec89a6e205ca2f742866"
+size = 8770659
+
+[[instance]]
+tier = "lpopt"
+name = "neos-5251015"
+format = "mps-bz2"
+url = "https://plato.asu.edu/ftp/lptestset/neos-5251015.mps.bz2"
+sha256 = "ee63abe9d2859e7f5692b53c7991403d790ea6dca137a299891ffc510b3ad68c"
+size = 7057355
+
+[[instance]]
+tier = "lpopt"
+name = "ns1687037"
+format = "mpc-bz2"
+url = "https://plato.asu.edu/ftp/lptestset/misc/ns1687037.bz2"
+sha256 = "1fac59c3609eae26e40ec39291c401e8eb35d1862a247b26dbd7e96962efe3e4"
+size = 2405674
+
+[[instance]]
+tier = "lpopt"
+name = "ns1688926"
+format = "mpc-bz2"
+url = "https://plato.asu.edu/ftp/lptestset/misc/ns1688926.bz2"
+sha256 = "66f20611968883930debd2eabcb0eece3d91c7e85d042705a107080e55a0cb0e"
+size = 1598845
+
+[[instance]]
+tier = "lpopt"
+name = "nug08-3rd"
+format = "mpc-bz2"
+url = "https://plato.asu.edu/ftp/lptestset/nug/nug08-3rd.bz2"
+sha256 = "1dadc68c4b9f57f95e0bb450fb2d495c0cd9a53a591764b99b03c0a6d37e7df0"
+size = 333107
+
+[[instance]]
+tier = "lpopt"
+name = "pds-100"
+format = "mpc-bz2"
+url = "https://plato.asu.edu/ftp/lptestset/pds/pds-100.bz2"
+sha256 = "15075babe6a96d6a68ecf66801ff107f7d222246b0c4396aa80a18451febd474"
+size = 4566703
+
+[[instance]]
+tier = "lpopt"
+name = "physiciansched3-3"
+format = "mps-bz2"
+url = "https://plato.asu.edu/ftp/lptestset/physiciansched3-3.mps.bz2"
+sha256 = "85b6ea50bd53385e397bb4a137b2f38af081f90226837b6d4936f189908cf481"
+size = 3718886
+
+[[instance]]
+tier = "lpopt"
+name = "qap15"
+format = "mps-bz2"
+url = "https://plato.asu.edu/ftp/lptestset/qap15.mps.bz2"
+sha256 = "edc084e9e3d8ccc5dd25f30c6593e6dbb00cba86c5e664c471d1de37ae28b68a"
+size = 282733
+
+[[instance]]
+tier = "lpopt"
+name = "rail4284"
+format = "mpc-bz2"
+url = "https://plato.asu.edu/ftp/lptestset/rail/rail4284.bz2"
+sha256 = "e214e677828de645a7950ce3e543fe3e51bd1a6fe011f0be51b2e34e8e199011"
+size = 8384295
+
+[[instance]]
+tier = "lpopt"
+name = "rmine15"
+format = "mps-bz2"
+url = "https://plato.asu.edu/ftp/lptestset/rmine15.mps.bz2"
+sha256 = "8b9a80f802bf5ed0c4fa2cc7a62823e5786fcfbf82fbc76dfeb24a543b150e66"
+size = 3267065
+
+[[instance]]
+tier = "lpopt"
+name = "s82"
+format = "mps-bz2"
+url = "https://plato.asu.edu/ftp/lptestset/s82.mps.bz2"
+sha256 = "ca2c10524c3729aef216d441426a59448e921b1c78431a88dc22f77167259f11"
+size = 28692817
+
+[[instance]]
+tier = "lpopt"
+name = "s100"
+format = "mps-bz2"
+url = "https://plato.asu.edu/ftp/lptestset/s100.mps.bz2"
+sha256 = "2d151aa3e2e6ffba47341066e9fc24044df411457cd1d54ccdaa4cf84d7c2256"
+size = 6741947
+
+[[instance]]
+tier = "lpopt"
+name = "s250r10"
+format = "mps-bz2"
+url = "https://plato.asu.edu/ftp/lptestset/s250r10.mps.bz2"
+sha256 = "bd438ccbc61061f5cb9ad8cdad17f8ba0481d98e81f292bacf8a9df5ff3beb2d"
+size = 4808615
+
+[[instance]]
+tier = "lpopt"
+name = "savsched1"
+format = "mps-bz2"
+url = "https://plato.asu.edu/ftp/lptestset/savsched1.mps.bz2"
+sha256 = "19547524cb3c23957ab93dd256d62d692a3a27164cacbdd3fa9c17493cc0a938"
+size = 6612196
+
+[[instance]]
+tier = "lpopt"
+name = "scpm1"
+format = "mps-bz2"
+url = "https://plato.asu.edu/ftp/lptestset/scpm1.mps.bz2"
+sha256 = "b3f8a1f8b8197938e0c035adf90407af4ed72b9df488bd93ced35eae62c13306"
+size = 23188090
+
+[[instance]]
+tier = "lpopt"
+name = "square41"
+format = "mps-bz2"
+url = "https://plato.asu.edu/ftp/lptestset/square41.mps.bz2"
+sha256 = "c48443ebead4490b917c85831fd240e88d79481c440a3ceda3246aa6f7596b24"
+size = 19023228
+
+[[instance]]
+tier = "lpopt"
+name = "stormG2_1000"
+format = "mpc-bz2"
+url = "https://plato.asu.edu/ftp/lptestset/misc/stormG2_1000.bz2"
+sha256 = "7ead9ccb1fbcb45e0c86a907ddecfbed26f6c774f5f63e513af83bfdcd34b2ed"
+size = 9091333
+
+[[instance]]
+tier = "lpopt"
+name = "supportcase10"
+format = "mps-bz2"
+url = "https://plato.asu.edu/ftp/lptestset/supportcase10.mps.bz2"
+sha256 = "7ae9279ef7d66fec1a60be7ccf5831a0f1dbad66831d4a510e7807e293ca2bf7"
+size = 2038347
+
+[[instance]]
+tier = "lpopt"
+name = "tpl-tub-ws1617"
+format = "mps-bz2"
+url = "https://plato.asu.edu/ftp/lptestset/tpl-tub-ws1617.mps.bz2"
+sha256 = "192e9c9063ddc09d6c9b55e6e8098d3f85ff107ed74acbda8aae30b704b955ca"
+size = 31197715
+
+[[instance]]
+tier = "lpopt"
+name = "woodlands09"
+format = "mps-bz2"
+url = "https://plato.asu.edu/ftp/lptestset/woodlands09.mps.bz2"
+sha256 = "1efccdbe21a7a4be25d02eee18f57ce98ee5c6abf460e49e4f59127348726fa5"
+size = 7064631
+
+# ------------------------------------------------------------- lpopt hard-8
+# Fetch-on-demand only (~1 GB total): setup_corpus.py skips these unless
+# --on-demand is passed.
+
+[[instance]]
+tier = "lpopt"
+name = "Dual2_5000"
+group = "hard"
+on-demand = true
+format = "mps-bz2"
+url = "https://plato.asu.edu/ftp/lptestset/Dual2_5000.mps.bz2"
+sha256 = ""
+size = 0
+
+[[instance]]
+tier = "lpopt"
+name = "Primal2_1000"
+group = "hard"
+on-demand = true
+format = "mps-bz2"
+url = "https://plato.asu.edu/ftp/lptestset/Primal2_1000.mps.bz2"
+sha256 = ""
+size = 0
+
+[[instance]]
+tier = "lpopt"
+name = "thk_48"
+group = "hard"
+on-demand = true
+format = "mps-bz2"
+url = "https://plato.asu.edu/ftp/lptestset/thk_48.mps.bz2"
+sha256 = ""
+size = 0
+
+[[instance]]
+tier = "lpopt"
+name = "thk_63"
+group = "hard"
+on-demand = true
+format = "mps-bz2"
+url = "https://plato.asu.edu/ftp/lptestset/thk_63.mps.bz2"
+sha256 = ""
+size = 0
+
+[[instance]]
+tier = "lpopt"
+name = "L1_sixm1000obs"
+group = "hard"
+on-demand = true
+format = "mpc-bz2"
+url = "https://plato.asu.edu/ftp/lptestset/L1_sixm1000obs.bz2"
+sha256 = ""
+size = 0
+
+[[instance]]
+tier = "lpopt"
+name = "L2CTA3D"
+group = "hard"
+on-demand = true
+format = "mps-bz2"
+url = "https://plato.asu.edu/ftp/lptestset/L2CTA3D.mps.bz2"
+sha256 = ""
+size = 0
+
+[[instance]]
+tier = "lpopt"
+name = "dlr2"
+group = "hard"
+on-demand = true
+format = "mps-bz2"
+url = "https://plato.asu.edu/ftp/lptestset/dlr2.mps.bz2"
+sha256 = ""
+size = 0
+
+[[instance]]
+tier = "lpopt"
+name = "set-cover-model"
+group = "hard"
+on-demand = true
+format = "mps-bz2"
+url = "https://plato.asu.edu/ftp/lptestset/set-cover-model.mps.bz2"
+sha256 = ""
+size = 0
+
+# ---------------------------------------------------------------- mip50 slice
+# MIPLIB 2017 (Gleixner et al. 2021), 50-instance complementary slice — none
+# already in benches/data/miplib/, includes all 6 currently-hard perf instances.
+# Groups: hard · set-covering · indep-set · fixed-charge · production ·
+# crew · binpack · scheduling · pb-misc. Per-instance URLs verified live
+# (HTTP 200) for all 50 on 2026-10-25; the benchmark.zip fallback in [meta]
+# covers a future host outage (format mps-gz-zip-entry, entry "<name>.mps.gz").
+
+[[instance]]
+tier = "mip50"
+name = "bab2"
+group = "hard"
+format = "mps-gz"
+url = "https://miplib.zib.de/WebData/instances/bab2.mps.gz"
+sha256 = "20e00452a193282e705fa360000cbd3697472939c4092f650bb083886a2ee206"
+size = 8231597
+
+[[instance]]
+tier = "mip50"
+name = "s100"
+group = "hard"
+format = "mps-gz"
+url = "https://miplib.zib.de/WebData/instances/s100.mps.gz"
+sha256 = "08d877ca851744473070b37004a98be82ddc4885d4af6efe11c1db80532a4854"
+size = 11354025
+
+[[instance]]
+tier = "mip50"
+name = "markshare2"
+group = "hard"
+format = "mps-gz"
+url = "https://miplib.zib.de/WebData/instances/markshare2.mps.gz"
+sha256 = "8b1ea0bee5d89f3247cfbf6fd5fbd1234ea48e1d7081a8b7fbd827602b4b8914"
+size = 2179
+
+[[instance]]
+tier = "mip50"
+name = "nursesched-medium-hint03"
+group = "hard"
+format = "mps-gz"
+url = "https://miplib.zib.de/WebData/instances/nursesched-medium-hint03.mps.gz"
+sha256 = "af57b8bcf52c99fa1ac7503d200e9647084478d2c2293b0cd95bdf3317c498ce"
+size = 2832596
+
+[[instance]]
+tier = "mip50"
+name = "neos-4647030-tutaki"
+group = "hard"
+format = "mps-gz"
+url = "https://miplib.zib.de/WebData/instances/neos-4647030-tutaki.mps.gz"
+sha256 = "040479f9c927c7ddeb7e8f92c8be80b49f7a8b9efe3e538954d28d2d4912d901"
+size = 10340987
+
+[[instance]]
+tier = "mip50"
+name = "neos-3402454-bohle"
+group = "hard"
+format = "mps-gz"
+url = "https://miplib.zib.de/WebData/instances/neos-3402454-bohle.mps.gz"
+sha256 = "14f69099fa3304ce1607ee5d7525932dc01445327ddab3c765e0d7a8f6e9fa36"
+size = 40228951
+
+[[instance]]
+tier = "mip50"
+name = "fast0507"
+group = "set-covering"
+format = "mps-gz"
+url = "https://miplib.zib.de/WebData/instances/fast0507.mps.gz"
+sha256 = "91c7390d814a24bc0c6b5edbc0b1b748d89f4ea75e655bc37b0406a86b8aee11"
+size = 1282725
+
+[[instance]]
+tier = "mip50"
+name = "seymour"
+group = "set-covering"
+format = "mps-gz"
+url = "https://miplib.zib.de/WebData/instances/seymour.mps.gz"
+sha256 = "654f87c1a97da00ef6a894972463c99d08090c3912e99335c2c7062254b13285"
+size = 142768
+
+[[instance]]
+tier = "mip50"
+name = "rail507"
+group = "set-covering"
+format = "mps-gz"
+url = "https://miplib.zib.de/WebData/instances/rail507.mps.gz"
+sha256 = "ecd62d6f0a76a9db236758a0d4ab9d4c0fa5b00ba59220c6b6073feff41ff39d"
+size = 1857299
+
+[[instance]]
+tier = "mip50"
+name = "b1c1s1"
+group = "set-covering"
+format = "mps-gz"
+url = "https://miplib.zib.de/WebData/instances/b1c1s1.mps.gz"
+sha256 = "3ad5eb7edd4a86889fbdaedc086444a93ebe07e54a743b5e19d2a5908340ad46"
+size = 72442
+
+[[instance]]
+tier = "mip50"
+name = "decomp2"
+group = "set-covering"
+format = "mps-gz"
+url = "https://miplib.zib.de/WebData/instances/decomp2.mps.gz"
+sha256 = "5403484be4c275388edbe3650d7e9683ceadc13a1a3ad22a1a77a5331f0a5148"
+size = 346146
+
+[[instance]]
+tier = "mip50"
+name = "glass-sc"
+group = "set-covering"
+format = "mps-gz"
+url = "https://miplib.zib.de/WebData/instances/glass-sc.mps.gz"
+sha256 = "2660c530ab32975e55c881d33208098eb0c4b281c6c3d50b029c7fd5a242019c"
+size = 244253
+
+[[instance]]
+tier = "mip50"
+name = "ex10"
+group = "set-covering"
+format = "mps-gz"
+url = "https://miplib.zib.de/WebData/instances/ex10.mps.gz"
+sha256 = "0e6f64cb7caa146c41f7a5257d87f3eefb704e3b5765966d36560891fb95381d"
+size = 5374321
+
+[[instance]]
+tier = "mip50"
+name = "nw04"
+group = "set-covering"
+format = "mps-gz"
+url = "https://miplib.zib.de/WebData/instances/nw04.mps.gz"
+sha256 = "c5ffad5996c481756028013399e052793e3ff3ec70e9f5f15c6bc471abe5389a"
+size = 1875816
+
+[[instance]]
+tier = "mip50"
+name = "eilA101-2"
+group = "set-covering"
+format = "mps-gz"
+url = "https://miplib.zib.de/WebData/instances/eilA101-2.mps.gz"
+sha256 = "b5e3dcc14719474fd6f58e4e090dc5e20add8a5858aaf9a6003e676238badf08"
+size = 3221783
+
+[[instance]]
+tier = "mip50"
+name = "sorrell3"
+group = "indep-set"
+format = "mps-gz"
+url = "https://miplib.zib.de/WebData/instances/sorrell3.mps.gz"
+sha256 = "e9a501f223cb00d892f7919054cc4c9671dc816ac8be48908cd7f396e9576869"
+size = 2757231
+
+[[instance]]
+tier = "mip50"
+name = "co-100"
+group = "indep-set"
+format = "mps-gz"
+url = "https://miplib.zib.de/WebData/instances/co-100.mps.gz"
+sha256 = "9a0c08c189afb9c2d66ac43bf20f911f60830053b353e25f5635dbcaf392e594"
+size = 7287957
+
+[[instance]]
+tier = "mip50"
+name = "n3div36"
+group = "indep-set"
+format = "mps-gz"
+url = "https://miplib.zib.de/WebData/instances/n3div36.mps.gz"
+sha256 = "cd26f712a2873ac77bbc30df522d0bbaf1b4f0c4214ab1f804bb67d43f8f62d8"
+size = 1546075
+
+[[instance]]
+tier = "mip50"
+name = "cvs16r128-89"
+group = "indep-set"
+format = "mps-gz"
+url = "https://miplib.zib.de/WebData/instances/cvs16r128-89.mps.gz"
+sha256 = "13500ea3846f62a738b3c00f504a84f2ccf0a48cc1519183299aeccb36ca4049"
+size = 84844
+
+[[instance]]
+tier = "mip50"
+name = "chromaticindex512-7"
+group = "indep-set"
+format = "mps-gz"
+url = "https://miplib.zib.de/WebData/instances/chromaticindex512-7.mps.gz"
+sha256 = "ef62a086214adc75ff06aa0e9640798756232fba3db909155a84b44db5be2940"
+size = 1073824
+
+[[instance]]
+tier = "mip50"
+name = "cost266-UUE"
+group = "fixed-charge"
+format = "mps-gz"
+url = "https://miplib.zib.de/WebData/instances/cost266-UUE.mps.gz"
+sha256 = "a6048c81daa7c992ff5c3f6b954e2fd4d77048c9b9c3e49b76380a3c3e73fa7d"
+size = 103586
+
+[[instance]]
+tier = "mip50"
+name = "dws008-01"
+group = "fixed-charge"
+format = "mps-gz"
+url = "https://miplib.zib.de/WebData/instances/dws008-01.mps.gz"
+sha256 = "4fe3b499d33cc5d66aeacbeb2001554777f289f4248c078fe653ed06073b5388"
+size = 362618
+
+[[instance]]
+tier = "mip50"
+name = "exp-1-500-5-5"
+group = "fixed-charge"
+format = "mps-gz"
+url = "https://miplib.zib.de/WebData/instances/exp-1-500-5-5.mps.gz"
+sha256 = "6e00da7741d808d331ff37bfcaf498bcc4c57ac24f32622f01047b6bbc7d870f"
+size = 19201
+
+[[instance]]
+tier = "mip50"
+name = "blp-ar98"
+group = "fixed-charge"
+format = "mps-gz"
+url = "https://miplib.zib.de/WebData/instances/blp-ar98.mps.gz"
+sha256 = "9540fa275cb8d8019cf2c8911d4af46a821bed0bd9207d558106cacef4169117"
+size = 1006691
+
+[[instance]]
+tier = "mip50"
+name = "netdiversion"
+group = "fixed-charge"
+format = "mps-gz"
+url = "https://miplib.zib.de/WebData/instances/netdiversion.mps.gz"
+sha256 = "5ef14bf4fa7f20b09b459bb4122fe6605eae7c53610903bdef6719325c4bbed0"
+size = 3523559
+
+[[instance]]
+tier = "mip50"
+name = "traininstance2"
+group = "fixed-charge"
+format = "mps-gz"
+url = "https://miplib.zib.de/WebData/instances/traininstance2.mps.gz"
+sha256 = "3a7ddb1a320fbf388480a3a8bfe56e2f774058b0d25c277f910c1ae37bb150c8"
+size = 329354
+
+[[instance]]
+tier = "mip50"
+name = "atlanta-ip"
+group = "production"
+format = "mps-gz"
+url = "https://miplib.zib.de/WebData/instances/atlanta-ip.mps.gz"
+sha256 = "99f599b2ed90a8d3af18f2d08ae0de9813cdb010f03cf03be9558bc27197fa19"
+size = 1459587
+
+[[instance]]
+tier = "mip50"
+name = "cmflsp50-24-8-8"
+group = "production"
+format = "mps-gz"
+url = "https://miplib.zib.de/WebData/instances/cmflsp50-24-8-8.mps.gz"
+sha256 = "97df2475adbc6cb319f2db153c24bc235f76c53c8d6d419c7b319016b0e76b01"
+size = 852638
+
+[[instance]]
+tier = "mip50"
+name = "uccase9"
+group = "production"
+format = "mps-gz"
+url = "https://miplib.zib.de/WebData/instances/uccase9.mps.gz"
+sha256 = "0f659faaa271ad0ed6b82fdfe874eab67b34619ce7598d4d156cfc030130576f"
+size = 1914738
+
+[[instance]]
+tier = "mip50"
+name = "wachplan"
+group = "production"
+format = "mps-gz"
+url = "https://miplib.zib.de/WebData/instances/wachplan.mps.gz"
+sha256 = "95207df19040ab0d5e26d53dc617e330ad11112f3bacb39f3bc4031844a2a5fa"
+size = 332043
+
+[[instance]]
+tier = "mip50"
+name = "irp"
+group = "production"
+format = "mps-gz"
+url = "https://miplib.zib.de/WebData/instances/irp.mps.gz"
+sha256 = "c587a00599896816d3edf62c1bbed531c27000b635bcd0b9f913442a232792e7"
+size = 505962
+
+[[instance]]
+tier = "mip50"
+name = "app1-1"
+group = "crew"
+format = "mps-gz"
+url = "https://miplib.zib.de/WebData/instances/app1-1.mps.gz"
+sha256 = "b99272cb3d91f16362ff03459422a1490018f7d10689900d5359a71f761e34bb"
+size = 133073
+
+[[instance]]
+tier = "mip50"
+name = "triptim1"
+group = "crew"
+format = "mps-gz"
+url = "https://miplib.zib.de/WebData/instances/triptim1.mps.gz"
+sha256 = "4224bb5b00adc82fc3781574874b3abe522abaf84cade5142a729c91f8a22793"
+size = 1944089
+
+[[instance]]
+tier = "mip50"
+name = "germanrr"
+group = "crew"
+format = "mps-gz"
+url = "https://miplib.zib.de/WebData/instances/germanrr.mps.gz"
+sha256 = "e7609d88c8ef96f40be85069e39ee5f208a7980625badb4d3908cd4b7a0058fb"
+size = 750368
+
+[[instance]]
+tier = "mip50"
+name = "brazil3"
+group = "crew"
+format = "mps-gz"
+url = "https://miplib.zib.de/WebData/instances/brazil3.mps.gz"
+sha256 = "717adb6b924d7f4f28b4f86cc63fbeb02c2e86dbd7163d3736b998c3caaf7ff0"
+size = 671862
+
+[[instance]]
+tier = "mip50"
+name = "comp07-2idx"
+group = "crew"
+format = "mps-gz"
+url = "https://miplib.zib.de/WebData/instances/comp07-2idx.mps.gz"
+sha256 = "6b26d9f4ab272364cc13c2a36fa3a300a9a642609cd342f73753d94ed0bc0e15"
+size = 537855
+
+[[instance]]
+tier = "mip50"
+name = "academictimetablesmall"
+group = "crew"
+format = "mps-gz"
+url = "https://miplib.zib.de/WebData/instances/academictimetablesmall.mps.gz"
+sha256 = "425392581ec5381493e76bbb6ef69d44fb7a827138e27a07586baaaa96daa922"
+size = 1246366
+
+[[instance]]
+tier = "mip50"
+name = "fhnw-binpack4-48"
+group = "binpack"
+format = "mps-gz"
+url = "https://miplib.zib.de/WebData/instances/fhnw-binpack4-48.mps.gz"
+sha256 = "91134a0cb48050ef0a248362d2e3fdff1bfc0dc4011c59e9b5e3991caef0cfd5"
+size = 101816
+
+[[instance]]
+tier = "mip50"
+name = "roll3000"
+group = "binpack"
+format = "mps-gz"
+url = "https://miplib.zib.de/WebData/instances/roll3000.mps.gz"
+sha256 = "47a0a827ac2d697b717fb55401afa5de9e042f026d6a462fb97d968a869d282d"
+size = 103405
+
+[[instance]]
+tier = "mip50"
+name = "bnatt400"
+group = "binpack"
+format = "mps-gz"
+url = "https://miplib.zib.de/WebData/instances/bnatt400.mps.gz"
+sha256 = "c7747e6fd9e8548da5fe6e391f942469f4b6e3043fc6eb3757a89b2c41be7313"
+size = 125909
+
+[[instance]]
+tier = "mip50"
+name = "rocI-4-11"
+group = "binpack"
+format = "mps-gz"
+url = "https://miplib.zib.de/WebData/instances/rocI-4-11.mps.gz"
+sha256 = "6d85a997fef66cc516a761e268d6670017a00e020e2bc43c001e1782617053ad"
+size = 212318
+
+[[instance]]
+tier = "mip50"
+name = "reblock115"
+group = "binpack"
+format = "mps-gz"
+url = "https://miplib.zib.de/WebData/instances/reblock115.mps.gz"
+sha256 = "cfc1223e622ed133400b5614cd382b6aa9a84fabfcea63510158b6c16e1e951c"
+size = 98516
+
+[[instance]]
+tier = "mip50"
+name = "csched007"
+group = "scheduling"
+format = "mps-gz"
+url = "https://miplib.zib.de/WebData/instances/csched007.mps.gz"
+sha256 = "7d9ffe638f906498f432519c66db4570704070afdb88435a4bb75e5641f09973"
+size = 34830
+
+[[instance]]
+tier = "mip50"
+name = "gfd-schedulen180f7d50m30k18"
+group = "scheduling"
+format = "mps-gz"
+url = "https://miplib.zib.de/WebData/instances/gfd-schedulen180f7d50m30k18.mps.gz"
+sha256 = "4a98fe1d8e019315a31f4bebbc242e2e196987fbf637400bd80ac4e5f74f8c76"
+size = 7284293
+
+[[instance]]
+tier = "mip50"
+name = "satellites2-40"
+group = "scheduling"
+format = "mps-gz"
+url = "https://miplib.zib.de/WebData/instances/satellites2-40.mps.gz"
+sha256 = "b7f9af26c67a777129bc5ed69be83d10449a3b149eaf465886f47099d5539862"
+size = 1166802
+
+[[instance]]
+tier = "mip50"
+name = "cryptanalysiskb128n5obj14"
+group = "pb-misc"
+format = "mps-gz"
+url = "https://miplib.zib.de/WebData/instances/cryptanalysiskb128n5obj14.mps.gz"
+sha256 = "66ebe0bf09d292764d174b2511185827401c6c2e70899040bb1a9ad47b110879"
+size = 1765615
+
+[[instance]]
+tier = "mip50"
+name = "splice1k1"
+group = "pb-misc"
+format = "mps-gz"
+url = "https://miplib.zib.de/WebData/instances/splice1k1.mps.gz"
+sha256 = "f3cc31ea5d2bfb5064c0ec089e817ecb1dd64dd4b96198f6addcabd9e48650f4"
+size = 4957833
+
+[[instance]]
+tier = "mip50"
+name = "k1mushroom"
+group = "pb-misc"
+format = "mps-gz"
+url = "https://miplib.zib.de/WebData/instances/k1mushroom.mps.gz"
+sha256 = "c610c5ad663b16ffd99faea168daa42f3a6cb0364c3592fd57bf92bc28eae516"
+size = 4664966
+
+[[instance]]
+tier = "mip50"
+name = "fastxgemm-n2r6s0t2"
+group = "pb-misc"
+format = "mps-gz"
+url = "https://miplib.zib.de/WebData/instances/fastxgemm-n2r6s0t2.mps.gz"
+sha256 = "e034ce428ac1bf325a15ae70aeff8c548854635a781a27f8b80cbb9c0af06246"
+size = 112266
+
+[[instance]]
+tier = "mip50"
+name = "peg-solitaire-a3"
+group = "pb-misc"
+format = "mps-gz"
+url = "https://miplib.zib.de/WebData/instances/peg-solitaire-a3.mps.gz"
+sha256 = "d3d2519a2670d64639a409313a872dfabec2a88915d793826132826062a8cb63"
+size = 188324

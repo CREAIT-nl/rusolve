@@ -1,0 +1,48 @@
+{
+    "name": "dialect_corpus",
+    "description": "The dialect-corpus model, hand-written against schemas/mof.1.9.schema.json",
+    "version": {"major": 1, "minor": 7},
+    "variables": [
+        {"name": "x"}, {"name": "y"}, {"name": "z"},
+        {"name": "b"}, {"name": "w"}, {"name": "v"}
+    ],
+    "objective": {
+        "sense": "max",
+        "function": {
+            "type": "ScalarAffineFunction",
+            "terms": [
+                {"coefficient": 3, "variable": "x"},
+                {"coefficient": 2, "variable": "y"},
+                {"coefficient": -1, "variable": "z"},
+                {"coefficient": 4, "variable": "b"},
+                {"coefficient": 0.5, "variable": "w"},
+                {"coefficient": 1, "variable": "v"}
+            ],
+            "constant": 7
+        }
+    },
+    "constraints": [
+        {"name": "c1", "function": {"type": "ScalarAffineFunction", "terms": [
+            {"coefficient": 1, "variable": "x"}, {"coefficient": 1, "variable": "y"},
+            {"coefficient": 1, "variable": "z"}], "constant": 0},
+         "set": {"type": "LessThan", "upper": 10}},
+        {"name": "c2", "function": {"type": "ScalarAffineFunction", "terms": [
+            {"coefficient": 1, "variable": "x"}, {"coefficient": -1, "variable": "y"}], "constant": 0},
+         "set": {"type": "Interval", "lower": 2, "upper": 8}},
+        {"name": "c3", "function": {"type": "ScalarAffineFunction", "terms": [
+            {"coefficient": 1, "variable": "x"}, {"coefficient": 1, "variable": "b"}], "constant": 0},
+         "set": {"type": "EqualTo", "value": 3}},
+        {"name": "c4", "function": {"type": "ScalarAffineFunction", "terms": [
+            {"coefficient": 1, "variable": "y"}, {"coefficient": 1, "variable": "v"}], "constant": 0},
+         "set": {"type": "GreaterThan", "lower": -5}},
+        {"name": "c5", "function": {"type": "ScalarAffineFunction", "terms": [
+            {"coefficient": 1, "variable": "z"}, {"coefficient": -1, "variable": "y"}], "constant": 0},
+         "set": {"type": "GreaterThan", "lower": -4}},
+        {"function": {"type": "Variable", "name": "x"}, "set": {"type": "Interval", "lower": 0, "upper": 6}},
+        {"function": {"type": "Variable", "name": "x"}, "set": {"type": "Integer"}},
+        {"function": {"type": "Variable", "name": "y"}, "set": {"type": "Interval", "lower": -2, "upper": 5}},
+        {"function": {"type": "Variable", "name": "b"}, "set": {"type": "ZeroOne"}},
+        {"function": {"type": "Variable", "name": "w"}, "set": {"type": "EqualTo", "value": 2}},
+        {"function": {"type": "Variable", "name": "v"}, "set": {"type": "LessThan", "upper": 3}}
+    ]
+}

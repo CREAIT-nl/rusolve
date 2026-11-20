@@ -1,0 +1,42 @@
+# rusolve
+
+> A Rust LP/MIP solver built to be driven by AI agents: a CLI whose `--format json` output is one versioned JSON object, an MCP server (`rusolve-cli mcp`), model diagnostics by name (infeasibility, lint, ranging, repair), and a registry of every option and environment variable. The MIP engine is a faithful Rust port of HiGHS 1.16.
+
+Use the MCP server when you can, the CLI otherwise. Both return the same JSON. Names (rows, columns) appear everywhere instead of indices. Exit codes: 0 ran (read the status in the output), 2 usage error, 3 input error, 4 internal error.
+
+## Start here
+
+- [Install](README.md#install): `uvx --from rusolve rusolve mcp` runs the MCP server from the Python wheel (which also provides the `rusolve` CLI); `cargo install --git <repo> rusolve-cli --locked` for the CLI alone.
+- [README, agent section](README.md#for-agents): build, MCP config, the five-minute path.
+- [Generated reference](docs/agent/reference.md): every command, MCP tool, option (with range and default) and environment variable. Generated from the binary by `tools/gen_agent_docs.py`; never stale.
+- [MCP server design](docs/design/mcp.md): tools, model handles, protocol notes.
+- [Python package](crates/rusolve-py/README.md): `import rusolve as rs; m = rs.Model()`, models from dicts, numpy, scipy.sparse or expressions; `rusolve.scipy.milp`/`linprog` for SciPy code. Spec: [python-api.md](docs/design/python-api.md).
+
+## Skills (task recipes for an agent)
+
+- [Solve a model and report](docs/skills/solve/SKILL.md)
+- [Debug an infeasible model](docs/skills/debug-infeasible/SKILL.md)
+- [Tune the solver for a problem family](docs/skills/tune/SKILL.md)
+- [Extend the solver (cut separators, branching, node selection)](docs/skills/extend/SKILL.md)
+- [Start here: classify a model, pick a playbook](docs/skills/start-here/SKILL.md)
+- [Assignment, transportation and network flow](docs/skills/assignment-transport-flow/SKILL.md)
+- [Set cover, packing and partitioning](docs/skills/set-cover-packing/SKILL.md)
+- [Scheduling: big-M versus indicators](docs/skills/scheduling/SKILL.md)
+- [Lot-sizing](docs/skills/lot-sizing/SKILL.md)
+- [Facility location](docs/skills/facility-location/SKILL.md)
+- [Routing: TSP and VRP](docs/skills/routing/SKILL.md)
+- [Piecewise-linear and semi-continuous](docs/skills/piecewise-semi/SKILL.md)
+- [Convex QP and portfolios](docs/skills/convex-qp/SKILL.md)
+- Claude Code plugin: `.claude-plugin/plugin.json` packages `docs/skills/` (`claude plugin validate . --strict`).
+
+## Contracts
+
+- [JSON schemas](docs/schema): one `rusolve-<command>-1.schema.json` per command output; `schema_version` is `rusolve.<command>/1`.
+- [Diagnostics contract](docs/design/diagnostics.md): rustc-style diagnostics with registered codes on every error path.
+- [MIP hook points](docs/design/hooks.md): the extension API for cuts, branching and node selection.
+- [Agent-task evals](evals/README.md): how well an agent drives the solver, graded against the solver's own answers.
+
+## Optional
+
+- [Option registry rows](docs/agent/reference.md#options): every option (HiGHS's own and rusolve's additions), each marked `search`, `tolerance`, `runtime` or `output`.
+- [Literature the techniques come from](docs/literature.md)

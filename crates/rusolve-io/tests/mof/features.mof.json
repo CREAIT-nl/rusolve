@@ -1,0 +1,48 @@
+{
+    "description": "tests/nl/features (Pyomo model in tests/nl/make_nl.py) hand-written in MathOptFormat 1.7; constant bodies and repeated terms kept as in the model",
+    "version": {"major": 1, "minor": 7},
+    "variables": [
+        {"name": "i"}, {"name": "b"}, {"name": "f"}, {"name": "u"},
+        {"name": "w"}, {"name": "p"}, {"name": "q"}
+    ],
+    "objective": {"sense": "min", "function": {"type": "ScalarAffineFunction", "terms": [
+        {"coefficient": 2, "variable": "i"}, {"coefficient": -3, "variable": "b"},
+        {"coefficient": 1, "variable": "f"}, {"coefficient": -1, "variable": "u"},
+        {"coefficient": 0.25, "variable": "w"}, {"coefficient": 1, "variable": "p"},
+        {"coefficient": 4, "variable": "q"}], "constant": -3.5}},
+    "constraints": [
+        {"name": "eq", "function": {"type": "ScalarAffineFunction", "terms": [
+            {"coefficient": 1, "variable": "i"}, {"coefficient": 1, "variable": "b"},
+            {"coefficient": 1, "variable": "q"}], "constant": 0},
+         "set": {"type": "EqualTo", "value": 2}},
+        {"name": "rng", "function": {"type": "ScalarAffineFunction", "terms": [
+            {"coefficient": 1, "variable": "f"}, {"coefficient": -1, "variable": "p"},
+            {"coefficient": 1, "variable": "u"}], "constant": 0},
+         "set": {"type": "Interval", "lower": -1, "upper": 6}},
+        {"name": "le", "function": {"type": "ScalarAffineFunction", "terms": [
+            {"coefficient": 1, "variable": "f"}, {"coefficient": 2, "variable": "q"}], "constant": 0},
+         "set": {"type": "LessThan", "upper": 3}},
+        {"name": "ge", "function": {"type": "ScalarAffineFunction", "terms": [
+            {"coefficient": 1, "variable": "u"}, {"coefficient": -1, "variable": "i"}], "constant": 0},
+         "set": {"type": "GreaterThan", "lower": -7}},
+        {"name": "cst", "function": {"type": "ScalarAffineFunction", "terms": [
+            {"coefficient": 1, "variable": "p"}, {"coefficient": 1, "variable": "w"}], "constant": 10},
+         "set": {"type": "GreaterThan", "lower": 12}},
+        {"name": "dup", "function": {"type": "ScalarAffineFunction", "terms": [
+            {"coefficient": 1, "variable": "i"}, {"coefficient": 1, "variable": "i"},
+            {"coefficient": -1, "variable": "b"}], "constant": 0},
+         "set": {"type": "LessThan", "upper": 9}},
+        {"name": "box", "function": {"type": "ScalarAffineFunction", "terms": [
+            {"coefficient": 1, "variable": "f"}, {"coefficient": 1, "variable": "u"},
+            {"coefficient": 1, "variable": "p"}], "constant": 0},
+         "set": {"type": "Interval", "lower": -20, "upper": 20}},
+        {"function": {"type": "Variable", "name": "i"}, "set": {"type": "Interval", "lower": -5, "upper": 5}},
+        {"function": {"type": "Variable", "name": "i"}, "set": {"type": "Integer"}},
+        {"function": {"type": "Variable", "name": "b"}, "set": {"type": "ZeroOne"}},
+        {"function": {"type": "Variable", "name": "u"}, "set": {"type": "LessThan", "upper": 4}},
+        {"function": {"type": "Variable", "name": "w"}, "set": {"type": "EqualTo", "value": 1.5}},
+        {"function": {"type": "Variable", "name": "p"}, "set": {"type": "GreaterThan", "lower": 0}},
+        {"function": {"type": "Variable", "name": "q"}, "set": {"type": "GreaterThan", "lower": -3}},
+        {"function": {"type": "Variable", "name": "q"}, "set": {"type": "LessThan", "upper": 2}}
+    ]
+}

@@ -1,0 +1,17 @@
+[package]
+name = "rusolve-model"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Append-only model builder (columns, rows, objective) that produces the ported HighsLp; the Rust core of the Python Model API (docs/design/python-api.md)"
+
+[dependencies]
+rusolve-ekk.workspace = true
+
+[dev-dependencies]
+criterion = { workspace = true }
+
+[[bench]]
+name = "builder"
+harness = false

@@ -1,0 +1,6 @@
+{
+  "id": "debug_infeasible",
+  "title": "Debug an infeasible model to a correct minimal fix",
+  "kind": "debug",
+  "prompt": "The LP in {dir}/model.mps is infeasible. Find out why with the rusolve tools and repair it with the fewest possible changes. You may only change row bounds or column bounds (no cost changes, no deleting or adding rows or columns), and the repaired model must solve to optimality.\n\nReport the repair as a list of edits in the rusolve `modify` format, for example {\"kind\": \"row_bounds\", \"name\": \"<row>\", \"lower\": 1, \"upper\": null} or {\"kind\": \"col_bounds\", \"name\": \"<column>\", \"upper\": 9} (a bound you leave out is unchanged; null is infinite). End your final message with one line of the form\nANSWER: {\"edits\": [ ... ]}"
+}

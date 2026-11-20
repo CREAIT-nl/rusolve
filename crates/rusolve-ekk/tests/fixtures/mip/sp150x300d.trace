@@ -1,0 +1,38 @@
+log Coefficient ranges:
+log   Matrix  [1e+00, 3e+03]
+log   Cost    [1e+00, 1e+00]
+log   Bound   [1e+00, 3e+03]
+log   RHS     [1e+00, 2e+03]
+log Presolving model
+log 343 rows, 493 cols, 986 nonzeros <t>s
+log 329 rows, 476 cols, 969 nonzeros <t>s
+log Presolve reductions: rows 329(-121); columns 476(-124); nonzeros 969(-231) 
+cb nodes=0 lpit=0 db=-inf pb=inf
+log Objective function is integral with scale 1
+log         Nodes      |    B&B Tree     |            Objective Bounds              |  Dynamic Constraints |       Work      
+log Src  Proc. InQueue |  Leaves   Expl. | BestBound       BestSol              Gap |   Cuts   InLp Confl. | LpIters     Time
+sol nodes=0 lpit=0 obj=71
+cb nodes=0 lpit=38 db=34.136438176451293 pb=71
+cb nodes=0 lpit=43 db=39.021273226948352 pb=71
+cb nodes=0 lpit=78 db=56.944598124843949 pb=71
+cb nodes=0 lpit=97 db=60.915094236858479 pb=71
+cb nodes=0 lpit=109 db=61.939678479058443 pb=71
+cb nodes=0 lpit=120 db=64.886848146933431 pb=71
+cb nodes=0 lpit=129 db=65.8865295351508 pb=71
+cb nodes=0 lpit=137 db=66.886201558765094 pb=71
+cb nodes=0 lpit=140 db=66.909556413876118 pb=71
+cb nodes=0 lpit=149 db=66.918979660396673 pb=71
+cb nodes=0 lpit=153 db=68.651004024523743 pb=71
+cb nodes=0 lpit=161 db=68.659540011808787 pb=71
+cb nodes=0 lpit=174 db=68.702921596276127 pb=71
+sol nodes=0 lpit=181 obj=69
+cb nodes=0 lpit=246 db=68.702921596276127 pb=69
+log Solving report
+log   Status            Optimal
+log   Primal bound      69
+log   Dual bound        69
+log   Gap               0% (tolerance: 0.01%)
+log   Solution status   feasible
+log   Nodes             1
+log   LP iterations     246
+final status=Optimal obj=69 bound=69 nodes=1 lp_iters=246

@@ -1,0 +1,94 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://rusolve.dev/schema/rusolve-event-1.schema.json",
+  "title": "rusolve.event/1",
+  "description": "One line of the NDJSON progress stream `rusolve mip --log-format jsonl` writes on stderr. Written by crates/rusolve-cli/src/progress.rs from the ported HiGHS callbacks kCallbackMipImprovingSolution and kCallbackMipInterrupt. Every line is one JSON object; the HiGHS text log is not written in this mode. The last line is always a `final` event whose status, objective, dual_bound and gap equal the `--format json` envelope (rusolve-result-1) of the same run. Non-finite solver values (an infinite bound before the first incumbent) are null.",
+  "type": "object",
+  "required": ["schema_version", "event", "seq", "t"],
+  "properties": {
+    "schema_version": { "const": "rusolve.event/1" },
+    "event": {
+      "description": "phase: the solve entered a phase. incumbent: an improving solution was found. bound: the dual bound moved (at most one per 50 ms). watchdog: the wall-clock watchdog acted. final: the last line.",
+      "enum": ["phase", "incumbent", "bound", "watchdog", "final"]
+    },
+    "seq": { "description": "1, 2, 3, ... in write order.", "type": "integer", "minimum": 1 },
+    "t": { "description": "Seconds since the solve started (after the model was read).", "type": "number", "minimum": 0 }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "event": { "const": "phase" } } },
+      "then": {
+        "required": ["phase"],
+        "properties": {
+          "phase": {
+            "description": "HiGHS has no phase callback: `presolve` is announced before Highs::run, `root` at the first MIP interrupt callback (presolve is done, the root node is being evaluated), `tree` when a callback first reports a positive node count.",
+            "enum": ["presolve", "root", "tree"]
+          }
+        }
+      }
+    },
+    {
+      "if": { "properties": { "event": { "const": "incumbent" } } },
+      "then": {
+        "required": ["objective", "source", "source_code", "dual_bound", "gap", "nodes", "lp_iterations", "improvement"],
+        "properties": {
+          "objective": { "description": "Objective of the new incumbent in the original model's sense and offset.", "type": ["number", "null"] },
+          "source": { "description": "HiGHS solution source name (HighsMipSolverData::solutionSourceToString), e.g. `Feasibility jump`, `Sub-MIP`, `Branching`; null when HiGHS did not report one.", "type": ["string", "null"] },
+          "source_code": { "description": "The one-letter code of that source in the HiGHS log.", "type": ["string", "null"] },
+          "dual_bound": { "type": ["number", "null"] },
+          "gap": { "description": "Relative gap as a fraction; null without a finite gap.", "type": ["number", "null"] },
+          "nodes": { "type": "integer" },
+          "lp_iterations": { "type": "integer" },
+          "improvement": { "description": "1 for the first incumbent, 2 for the next, ...", "type": "integer", "minimum": 1 }
+        }
+      }
+    },
+    {
+      "if": { "properties": { "event": { "const": "bound" } } },
+      "then": {
+        "required": ["dual_bound", "primal_bound", "gap", "nodes", "lp_iterations"],
+        "properties": {
+          "dual_bound": { "type": ["number", "null"] },
+          "primal_bound": { "type": ["number", "null"] },
+          "gap": { "type": ["number", "null"] },
+          "nodes": { "type": "integer" },
+          "lp_iterations": { "type": "integer" }
+        }
+      }
+    },
+    {
+      "if": { "properties": { "event": { "const": "watchdog" } } },
+      "then": {
+        "required": ["action"],
+        "properties": {
+          "action": {
+            "description": "interrupt_requested: the limit was reached and the interrupt callback was asked to stop the solve. hard_stop: the solve did not return within the grace period; the watchdog prints the result from the last state the callbacks saw and ends the process with exit code 0.",
+            "enum": ["interrupt_requested", "hard_stop"]
+          },
+          "limit_s": { "type": "number" },
+          "grace_s": { "type": "number" }
+        }
+      }
+    },
+    {
+      "if": { "properties": { "event": { "const": "final" } } },
+      "then": {
+        "required": ["status", "objective", "dual_bound", "gap", "has_solution", "nodes", "lp_iterations", "time_s", "limit"],
+        "properties": {
+          "status": { "description": "The envelope's status (rusolve-result-1).", "type": "string" },
+          "objective": { "type": ["number", "null"] },
+          "dual_bound": { "type": ["number", "null"] },
+          "gap": { "type": ["number", "null"] },
+          "has_solution": { "type": "boolean" },
+          "nodes": { "type": "integer" },
+          "lp_iterations": { "type": "integer" },
+          "time_s": { "type": "number" },
+          "limit": {
+            "description": "The envelope's `limit` object (kind, enforced_by, improving); null when no limit ended the solve.",
+            "type": ["object", "null"]
+          }
+        }
+      }
+    }
+  ]
+}

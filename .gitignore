@@ -1,0 +1,28 @@
+/target/
+.DS_Store
+__pycache__/
+**/.pytest_cache/
+/.venv*/
+
+# HiGHS source checkout used by tools/highs-oracle and the differential tests
+reference/
+
+# benchmark instances are downloaded, not tracked (benches/data/ATTRIBUTION.md)
+/benches/data/miplib/
+/benches/data/lp47/
+/benches/data/lpopt/
+/benches/data/mip50/
+/benches/data/cblib/
+/benches/data/families/
+/benches/data/qp/
+
+# build and run outputs
+/crates/rusolve-py/python/rusolve/_bin/
+/tools/diff/mip_cases/
+/dist-wheels/
+
+# local editor and agent state
+/.claude/
+/.slim/
+/.idea/
+/.vscode/

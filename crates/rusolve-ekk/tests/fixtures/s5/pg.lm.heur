@@ -1,0 +1,3 @@
+[HeurSol] name=local_mip dispatch=1 worker=0 effort_at=653632 obj=-3936.8440757191688 accepted=1
+[Sequential] heur=local_mip effort=6791578
+final obj=-8674.3426071170288 status=Optimal

@@ -1,0 +1,283 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://rusolve.dev/schema/rusolve-explain-1.schema.json",
+  "title": "rusolve.explain/1",
+  "description": "The object `rusolve explain <model> --format json` writes on stdout. Written by crates/rusolve-cli/src/explain.rs. A MIP is explained through its LP relaxation: kind is then \"relaxation\" and note says so (a true MIP IIS is later work). With `--mip-iis` on a MIP, kind is \"mip\": status is Infeasible (a verified-or-not IIS of the MIP itself in explanation, see $defs/infeasible_mip), Feasible (a solution passing `rusolve check` was found) or Unknown (limits hit before a verdict); explanation is null in the last two. `explanation` is null when the model is feasible and bounded (or the solve ended in some other status). `verified` is null when there is nothing to verify; otherwise true only if every check passed. JSON has no inf: an infinite bound is null.",
+  "type": "object",
+  "required": ["schema_version", "model", "kind", "status", "note", "explanation", "verified"],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": { "const": "rusolve.explain/1" },
+    "model": {
+      "type": "object",
+      "required": ["path", "num_rows", "num_cols", "num_integer"],
+      "properties": {
+        "path": { "type": "string" },
+        "num_rows": { "type": "integer" },
+        "num_cols": { "type": "integer" },
+        "num_integer": { "type": "integer" }
+      }
+    },
+    "kind": {
+      "description": "What the explanation is about: the model as an LP, or the LP relaxation of a MIP.",
+      "enum": ["lp", "relaxation", "mip"]
+    },
+    "status": {
+      "description": "The LP status, in the spelling of rusolve.result/1 (Optimal, Infeasible, Unbounded, ...).",
+      "type": "string"
+    },
+    "note": { "type": ["string", "null"] },
+    "verified": { "type": ["boolean", "null"] },
+    "explanation": {
+      "oneOf": [
+        { "type": "null" },
+        {
+          "type": "object",
+          "required": ["type", "verified"],
+          "properties": {
+            "type": { "enum": ["infeasible", "unbounded"] },
+            "verified": { "type": "boolean" }
+          },
+          "oneOf": [
+            { "$ref": "#/$defs/infeasible" },
+            { "$ref": "#/$defs/infeasible_mip" },
+            { "$ref": "#/$defs/unbounded" }
+          ]
+        }
+      ]
+    }
+  },
+  "$defs": {
+    "member": {
+      "type": "object",
+      "required": ["name", "index", "bound", "lower", "upper"],
+      "properties": {
+        "name": { "type": "string" },
+        "index": { "type": "integer" },
+        "bound": {
+          "description": "Which bound(s) of the member are in the set; none for a column in the set with no bound of its own.",
+          "enum": ["lower", "upper", "both", "none"]
+        },
+        "lower": { "type": ["number", "null"] },
+        "upper": { "type": ["number", "null"] },
+        "note": { "type": "string" }
+      }
+    },
+    "infeasible": {
+      "type": "object",
+      "required": ["type", "iis", "verification", "farkas", "verified"],
+      "properties": {
+        "type": { "const": "infeasible" },
+        "iis": {
+          "oneOf": [
+            { "type": "null" },
+            {
+              "type": "object",
+              "required": ["kind", "highs_claim", "num_rows", "num_cols", "rows", "columns", "truncated"],
+              "properties": {
+                "kind": { "enum": ["lp", "relaxation"] },
+                "highs_claim": { "enum": ["irreducible", "reducible", "unknown"] },
+                "num_rows": { "type": "integer" },
+                "num_cols": { "type": "integer" },
+                "rows": { "type": "array", "items": { "$ref": "#/$defs/member" } },
+                "columns": { "type": "array", "items": { "$ref": "#/$defs/member" } },
+                "truncated": { "type": "boolean" }
+              }
+            }
+          ]
+        },
+        "iis_error": { "type": "string" },
+        "verification": {
+          "oneOf": [
+            { "type": "null" },
+            {
+              "type": "object",
+              "required": ["performed", "set_infeasible", "irreducible", "checks", "failures", "verified"],
+              "properties": {
+                "performed": { "type": "boolean" },
+                "set_infeasible": { "type": ["boolean", "null"] },
+                "irreducible": { "type": ["boolean", "null"] },
+                "checks": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "required": ["dropped", "rest_feasible"],
+                    "properties": {
+                      "dropped": {
+                        "type": "object",
+                        "required": ["type", "name", "bound"],
+                        "properties": {
+                          "type": { "enum": ["row", "column"] },
+                          "name": { "type": "string" },
+                          "bound": { "enum": ["lower", "upper"] }
+                        }
+                      },
+                      "rest_feasible": { "type": "boolean" }
+                    }
+                  }
+                },
+                "failures": { "type": "array", "items": { "type": "string" } },
+                "verified": { "type": "boolean" }
+              }
+            }
+          ]
+        },
+        "farkas": {
+          "type": "object",
+          "required": ["available"],
+          "properties": {
+            "available": { "type": "boolean" },
+            "reason": { "type": "string" },
+            "num_nonzero": { "type": "integer" },
+            "multipliers": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": ["row", "index", "multiplier"],
+                "properties": {
+                  "row": { "type": "string" },
+                  "index": { "type": "integer" },
+                  "multiplier": { "type": "number" }
+                }
+              }
+            },
+            "truncated": { "type": "boolean" },
+            "proof": {
+              "type": "object",
+              "required": ["statement", "combined_form", "combined_form_nonzero", "row_bounds_interval", "column_bounds_interval", "direction", "gap", "tolerance", "verified"],
+              "properties": {
+                "statement": { "type": "string" },
+                "combined_form": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "required": ["column", "index", "coefficient"],
+                    "properties": {
+                      "column": { "type": "string" },
+                      "index": { "type": "integer" },
+                      "coefficient": { "type": "number" }
+                    }
+                  }
+                },
+                "combined_form_nonzero": { "type": "integer" },
+                "row_bounds_interval": { "type": "array", "items": { "type": ["number", "null"] }, "minItems": 2, "maxItems": 2 },
+                "column_bounds_interval": { "type": "array", "items": { "type": ["number", "null"] }, "minItems": 2, "maxItems": 2 },
+                "direction": { "enum": ["row_lower_above_col_upper", "col_lower_above_row_upper"] },
+                "gap": { "type": ["number", "null"], "description": "Strictly positive when the proof holds: 0 >= gap > 0." },
+                "tolerance": { "type": "number" },
+                "verified": { "type": "boolean" }
+              }
+            }
+          }
+        },
+        "verified": { "type": "boolean" }
+      }
+    },
+    "infeasible_mip": {
+      "description": "An IIS of the MIP itself (rusolve explain --mip-iis; crates/rusolve-cli/src/explain_mip.rs). Members are finite bounds of rows and columns; integrality of every column is always kept. No Farkas certificate (not defined for a MIP). `irreducible` is true only if no member was left undetermined. `undetermined` members are in the set (it stays infeasible) but a test of removing them hit a node or time limit.",
+      "type": "object",
+      "required": ["type", "iis", "mip_search", "verification", "verified"],
+      "properties": {
+        "type": { "const": "infeasible" },
+        "iis": {
+          "type": "object",
+          "required": ["kind", "num_rows", "num_cols", "rows", "columns", "truncated", "irreducible", "undetermined"],
+          "properties": {
+            "kind": { "const": "mip" },
+            "num_rows": { "type": "integer" },
+            "num_cols": { "type": "integer" },
+            "rows": { "type": "array", "items": { "$ref": "#/$defs/member" } },
+            "columns": { "type": "array", "items": { "$ref": "#/$defs/member" } },
+            "truncated": { "type": "boolean" },
+            "irreducible": { "type": "boolean" },
+            "undetermined": { "type": "array", "items": { "$ref": "#/$defs/bound_ref" } }
+          }
+        },
+        "mip_search": {
+          "type": "object",
+          "required": ["algorithm", "sources", "seed", "seed_elements", "num_solves", "num_verification_solves", "per_test_node_limit", "time_limit", "undetermined"],
+          "properties": {
+            "algorithm": { "type": "string" },
+            "sources": { "type": "array", "items": { "type": "string" } },
+            "seed": { "enum": ["relaxation_iis", "all_bounds"] },
+            "seed_elements": { "type": "integer" },
+            "num_solves": { "type": "integer", "description": "MIP solves done by the search." },
+            "num_verification_solves": { "type": "integer" },
+            "per_test_node_limit": { "type": "integer" },
+            "time_limit": { "type": ["number", "null"] },
+            "undetermined": { "type": "array", "items": { "$ref": "#/$defs/bound_ref" } }
+          }
+        },
+        "verification": {
+          "type": "object",
+          "required": ["performed", "set_infeasible", "irreducible", "checks", "failures", "verified"],
+          "properties": {
+            "performed": { "type": "boolean" },
+            "set_infeasible": { "type": ["boolean", "null"] },
+            "irreducible": { "type": ["boolean", "null"] },
+            "checks": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": ["dropped", "rest_feasible", "witness_checked"],
+                "properties": {
+                  "dropped": { "$ref": "#/$defs/bound_ref" },
+                  "rest_feasible": { "type": "boolean" },
+                  "witness_checked": { "type": "boolean", "description": "The feasible solution found without this member passed `rusolve check`." }
+                }
+              }
+            },
+            "failures": { "type": "array", "items": { "type": "string" } },
+            "verified": { "type": "boolean" }
+          }
+        },
+        "verified": { "type": "boolean" }
+      }
+    },
+    "bound_ref": {
+      "type": "object",
+      "required": ["type", "name", "bound"],
+      "properties": {
+        "type": { "enum": ["row", "column"] },
+        "name": { "type": "string" },
+        "bound": { "enum": ["lower", "upper"] }
+      }
+    },
+    "unbounded": {
+      "type": "object",
+      "required": ["type", "ray", "verified"],
+      "properties": {
+        "type": { "const": "unbounded" },
+        "ray": {
+          "type": "object",
+          "required": ["available"],
+          "properties": {
+            "available": { "type": "boolean" },
+            "reason": { "type": "string" },
+            "num_nonzero": { "type": "integer" },
+            "direction": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": ["column", "index", "value"],
+                "properties": {
+                  "column": { "type": "string" },
+                  "index": { "type": "integer" },
+                  "value": { "type": "number" }
+                }
+              }
+            },
+            "truncated": { "type": "boolean" },
+            "objective_sense": { "enum": ["minimize", "maximize"] },
+            "objective_rate": { "type": "number" },
+            "max_row_violation": { "type": "number" },
+            "max_col_violation": { "type": "number" },
+            "tolerance": { "type": "number" },
+            "failures": { "type": "array", "items": { "type": "string" } }
+          }
+        },
+        "verified": { "type": "boolean" }
+      }
+    }
+  }
+}

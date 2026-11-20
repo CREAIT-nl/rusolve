@@ -1,0 +1,197 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://rusolve.dev/schema/rusolve-check-1.schema.json",
+  "title": "rusolve.check/1",
+  "description": "The report `rusolve check <model> <solution> --format json` writes as the one JSON object on stdout. Written by crates/rusolve-cli/src/check.rs. The verdict and the tolerances are the ported HiGHS assessPrimalSolution / getKktFailures; the per-item findings, by name, are rusolve's. Exit code 0 whenever the check ran, whatever the verdict; 3 for an input error (the message names the column).",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "model",
+    "solution_path",
+    "verdict",
+    "tolerances",
+    "objective",
+    "summary",
+    "highs",
+    "agrees_with_highs",
+    "findings_total",
+    "findings_shown",
+    "findings"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": { "const": "rusolve.check/1" },
+    "model": {
+      "type": "object",
+      "required": ["path", "rows", "cols", "integer_cols"],
+      "additionalProperties": false,
+      "properties": {
+        "path": { "type": "string" },
+        "rows": { "type": "integer", "minimum": 0 },
+        "cols": { "type": "integer", "minimum": 0 },
+        "integer_cols": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "solution_path": { "type": "string" },
+    "verdict": {
+      "description": "feasible iff there is no finding at the applied tolerance.",
+      "enum": ["feasible", "infeasible"]
+    },
+    "tolerances": {
+      "type": "object",
+      "required": [
+        "primal_feasibility_tolerance",
+        "mip_feasibility_tolerance",
+        "applied"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "primal_feasibility_tolerance": { "type": "number" },
+        "mip_feasibility_tolerance": { "type": "number" },
+        "applied": {
+          "description": "mip_feasibility_tolerance when the model has an integer column, else primal_feasibility_tolerance (HighsLpUtils.cpp assessLpPrimalSolution).",
+          "type": "number"
+        }
+      }
+    },
+    "objective": {
+      "type": "object",
+      "required": ["value", "offset", "sense"],
+      "additionalProperties": false,
+      "properties": {
+        "value": {
+          "description": "sum(cost * value) + offset, in the model's own sense.",
+          "type": "number"
+        },
+        "offset": { "type": "number" },
+        "sense": { "enum": ["minimize", "maximize"] }
+      }
+    },
+    "summary": {
+      "type": "object",
+      "required": [
+        "column_bounds",
+        "rows",
+        "integrality",
+        "total_violations"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "column_bounds": { "$ref": "#/$defs/counts" },
+        "rows": { "$ref": "#/$defs/counts" },
+        "integrality": { "$ref": "#/$defs/counts" },
+        "general_constraints": {
+          "description": "Semi-continuous membership and general constraints; present only for a model that has them.",
+          "$ref": "#/$defs/counts"
+        },
+        "total_violations": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "highs": {
+      "description": "What the ported HiGHS functions report on the same solution.",
+      "type": "object",
+      "required": [
+        "valid",
+        "integral",
+        "feasible",
+        "kkt_num_primal_infeasibilities",
+        "kkt_max_primal_infeasibility",
+        "kkt_sum_primal_infeasibilities"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "valid": { "type": "boolean" },
+        "integral": { "type": "boolean" },
+        "feasible": { "type": "boolean" },
+        "kkt_num_primal_infeasibilities": { "type": "integer", "minimum": 0 },
+        "kkt_max_primal_infeasibility": { "type": "number" },
+        "kkt_sum_primal_infeasibilities": { "type": "number" }
+      }
+    },
+    "agrees_with_highs": {
+      "description": "true when the counts above equal HiGHS's; false would be a checker bug.",
+      "type": "boolean"
+    },
+    "findings_total": {
+      "description": "Findings before the --max-findings cut; equals summary.total_violations.",
+      "type": "integer",
+      "minimum": 0
+    },
+    "findings_shown": { "type": "integer", "minimum": 0 },
+    "qp": {
+      "description": "Convex QP. Present only when the model has a Hessian; then objective.value includes x'Qx/2. The KKT measures need the '# Dual solution values' section of a raw solution file (kkt_verdict is unknown without it). Written by crates/rusolve-cli/src/check_qp.rs.",
+      "type": "object",
+      "required": [
+        "objective_linear", "objective_quadratic", "duals_present", "kkt_verdict", "tolerance",
+        "stationarity", "dual_infeasibility", "complementarity", "dual_objective",
+        "duality_gap", "duality_gap_rel"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "objective_linear": { "type": "number" },
+        "objective_quadratic": { "type": "number" },
+        "duals_present": { "type": "boolean" },
+        "kkt_verdict": { "enum": ["optimal", "not_optimal", "unknown"] },
+        "tolerance": { "type": "number" },
+        "stationarity": { "type": ["number", "null"] },
+        "dual_infeasibility": { "type": ["number", "null"] },
+        "complementarity": { "type": ["number", "null"] },
+        "dual_objective": { "type": ["number", "null"] },
+        "duality_gap": { "type": ["number", "null"] },
+        "duality_gap_rel": { "type": ["number", "null"] }
+      }
+    },
+    "findings": {
+      "description": "Largest amount first, at most --max-findings (default 50).",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["kind", "name", "value", "amount"],
+        "additionalProperties": false,
+        "properties": {
+          "kind": {
+            "enum": [
+              "column_bound",
+              "row",
+              "integrality",
+              "semi_continuous",
+              "indicator",
+              "sos",
+              "pwl",
+              "function"
+            ]
+          },
+          "detail": {
+            "description": "Semi-continuous and general-constraint kinds only: what is violated, in words.",
+            "type": "string"
+          },
+          "name": { "type": "string" },
+          "value": {
+            "description": "Column value, or row activity for kind row.",
+            "type": "number"
+          },
+          "lower": { "type": ["number", "null"] },
+          "upper": { "type": ["number", "null"] },
+          "violated_bound": { "type": ["number", "null"] },
+          "nearest_integer": { "type": ["number", "null"] },
+          "amount": {
+            "description": "Distance past the violated bound, or to the nearest integer.",
+            "type": "number"
+          }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "counts": {
+      "type": "object",
+      "required": ["count", "max", "sum"],
+      "additionalProperties": false,
+      "properties": {
+        "count": { "type": "integer", "minimum": 0 },
+        "max": { "type": "number" },
+        "sum": { "type": "number" }
+      }
+    }
+  }
+}

@@ -1,0 +1,97 @@
+[HeurSol] name=fpr dispatch=1 worker=0 effort_at=56435 obj=-3359.0094241300003 accepted=1
+[HeurSol] name=fpr dispatch=1 worker=0 effort_at=123555 obj=-2467.5561692000001 accepted=1
+[HeurSol] name=fpr dispatch=1 worker=0 effort_at=131875 obj=-1451.8635662500001 accepted=1
+[HeurSol] name=fpr dispatch=1 worker=0 effort_at=163620 obj=-1305.8216596199998 accepted=1
+[HeurSol] name=fpr dispatch=1 worker=0 effort_at=220821 obj=-3359.0094241300003 accepted=1
+[HeurSol] name=fpr dispatch=1 worker=0 effort_at=295744 obj=-2040.2222511 accepted=1
+[HeurSol] name=fpr dispatch=1 worker=0 effort_at=331614 obj=-1305.8216596199998 accepted=1
+[HeurSol] name=fpr dispatch=1 worker=0 effort_at=388972 obj=-1305.8216596199998 accepted=1
+[HeurSol] name=fpr dispatch=1 worker=0 effort_at=445407 obj=-3359.0094241300003 accepted=1
+[HeurSol] name=fpr dispatch=1 worker=0 effort_at=512527 obj=-2467.5561692000001 accepted=1
+[HeurSol] name=fpr dispatch=1 worker=0 effort_at=536728 obj=-2170.1434206500003 accepted=1
+[Sequential] heur=fpr effort=618460
+[HeurSol] name=fpr dispatch=1029 worker=0 effort_at=34857 obj=-3359.0094241300003 accepted=1
+[HeurSol] name=fpr dispatch=1029 worker=0 effort_at=67372 obj=-2618.5164703800001 accepted=1
+[HeurSol] name=fpr dispatch=1029 worker=0 effort_at=70845 obj=-2618.5164703800001 accepted=1
+[HeurSol] name=fpr dispatch=1029 worker=0 effort_at=106624 obj=-2584.9880059800003 accepted=1
+[HeurSol] name=fpr dispatch=1029 worker=0 effort_at=142247 obj=-3359.0094241300003 accepted=1
+[HeurSol] name=fpr dispatch=1029 worker=0 effort_at=164358 obj=-3628.5214506500001 accepted=1
+[HeurSol] name=fpr dispatch=1029 worker=0 effort_at=199371 obj=-2584.9880059800003 accepted=1
+[HeurSol] name=fpr dispatch=1029 worker=0 effort_at=234982 obj=-2985.7189293300007 accepted=1
+[HeurSol] name=fpr dispatch=1029 worker=0 effort_at=269839 obj=-3359.0094241300003 accepted=1
+[HeurSol] name=fpr dispatch=1029 worker=0 effort_at=302354 obj=-2618.5164703800001 accepted=1
+[HeurSol] name=fpr dispatch=1029 worker=0 effort_at=305827 obj=-2618.5164703800001 accepted=1
+[Sequential] heur=fpr effort=319172
+[HeurSol] name=fpr dispatch=1031 worker=0 effort_at=33200 obj=-3359.0094241300003 accepted=1
+[HeurSol] name=fpr dispatch=1031 worker=0 effort_at=65715 obj=-2882.8294230800002 accepted=1
+[HeurSol] name=fpr dispatch=1031 worker=0 effort_at=69188 obj=-2882.8294230800002 accepted=1
+[HeurSol] name=fpr dispatch=1031 worker=0 effort_at=102483 obj=-2395.1203257299999 accepted=1
+[HeurSol] name=fpr dispatch=1031 worker=0 effort_at=136449 obj=-3359.0094241300003 accepted=1
+[HeurSol] name=fpr dispatch=1031 worker=0 effort_at=170325 obj=-3535.5906340600004 accepted=1
+[HeurSol] name=fpr dispatch=1031 worker=0 effort_at=202854 obj=-2395.1203257299999 accepted=1
+[HeurSol] name=fpr dispatch=1031 worker=0 effort_at=237185 obj=-2554.2416690300001 accepted=1
+[HeurSol] name=fpr dispatch=1031 worker=0 effort_at=270385 obj=-3359.0094241300003 accepted=1
+[HeurSol] name=fpr dispatch=1031 worker=0 effort_at=302900 obj=-2882.8294230800002 accepted=1
+[HeurSol] name=fpr dispatch=1031 worker=0 effort_at=306373 obj=-2882.8294230800002 accepted=1
+[Sequential] heur=fpr effort=318904
+[HeurSol] name=fpr dispatch=1033 worker=0 effort_at=32574 obj=-3359.0094241300003 accepted=1
+[HeurSol] name=fpr dispatch=1033 worker=0 effort_at=65068 obj=-2732.9010809000006 accepted=1
+[HeurSol] name=fpr dispatch=1033 worker=0 effort_at=68520 obj=-2732.9010809000006 accepted=1
+[HeurSol] name=fpr dispatch=1033 worker=0 effort_at=101815 obj=-2752.0744887699998 accepted=1
+[HeurSol] name=fpr dispatch=1033 worker=0 effort_at=135155 obj=-3359.0094241300003 accepted=1
+[HeurSol] name=fpr dispatch=1033 worker=0 effort_at=168564 obj=-3796.7728067600005 accepted=1
+[HeurSol] name=fpr dispatch=1033 worker=0 effort_at=201093 obj=-2752.0744887699998 accepted=1
+[HeurSol] name=fpr dispatch=1033 worker=0 effort_at=235343 obj=-2908.77216567 accepted=1
+[HeurSol] name=fpr dispatch=1033 worker=0 effort_at=267917 obj=-3359.0094241300003 accepted=1
+[Sequential] heur=fpr effort=319109
+[HeurSol] name=fpr dispatch=1345 worker=0 effort_at=32574 obj=-3359.0094241300003 accepted=1
+[HeurSol] name=fpr dispatch=1345 worker=0 effort_at=65068 obj=-2732.9010809000006 accepted=1
+[HeurSol] name=fpr dispatch=1345 worker=0 effort_at=68520 obj=-2732.9010809000006 accepted=1
+[HeurSol] name=fpr dispatch=1345 worker=0 effort_at=101792 obj=-3132.8453584700001 accepted=1
+[HeurSol] name=fpr dispatch=1345 worker=0 effort_at=135132 obj=-3359.0094241300003 accepted=1
+[HeurSol] name=fpr dispatch=1345 worker=0 effort_at=168341 obj=-3880.1703266800009 accepted=1
+[HeurSol] name=fpr dispatch=1345 worker=0 effort_at=200847 obj=-3132.8453584700001 accepted=1
+[HeurSol] name=fpr dispatch=1345 worker=0 effort_at=235580 obj=-2905.9924636199999 accepted=1
+[HeurSol] name=fpr dispatch=1345 worker=0 effort_at=268154 obj=-3359.0094241300003 accepted=1
+[Sequential] heur=fpr effort=318495
+[HeurSol] name=fpr dispatch=2099 worker=0 effort_at=32574 obj=-3359.0094241300003 accepted=1
+[HeurSol] name=fpr dispatch=2099 worker=0 effort_at=65045 obj=-2383.1248324300004 accepted=1
+[HeurSol] name=fpr dispatch=2099 worker=0 effort_at=68474 obj=-2383.1248324300004 accepted=1
+[HeurSol] name=fpr dispatch=2099 worker=0 effort_at=101769 obj=-2800.4431359699997 accepted=1
+[HeurSol] name=fpr dispatch=2099 worker=0 effort_at=135109 obj=-3359.0094241300003 accepted=1
+[HeurSol] name=fpr dispatch=2099 worker=0 effort_at=161404 obj=-3826.3412526900006 accepted=1
+[HeurSol] name=fpr dispatch=2099 worker=0 effort_at=193933 obj=-2800.4431359699997 accepted=1
+[HeurSol] name=fpr dispatch=2099 worker=0 effort_at=228163 obj=-2905.9924636199999 accepted=1
+[HeurSol] name=fpr dispatch=2099 worker=0 effort_at=260737 obj=-3359.0094241300003 accepted=1
+[Sequential] heur=fpr effort=319187
+[HeurSol] name=fpr dispatch=8497 worker=0 effort_at=32574 obj=-3359.0094241300003 accepted=1
+[HeurSol] name=fpr dispatch=8497 worker=0 effort_at=65045 obj=-2499.6160949300001 accepted=1
+[HeurSol] name=fpr dispatch=8497 worker=0 effort_at=68474 obj=-2499.6160949300001 accepted=1
+[HeurSol] name=fpr dispatch=8497 worker=0 effort_at=101769 obj=-2800.4431359699997 accepted=1
+[HeurSol] name=fpr dispatch=8497 worker=0 effort_at=135109 obj=-3359.0094241300003 accepted=1
+[HeurSol] name=fpr dispatch=8497 worker=0 effort_at=160093 obj=-3597.0791365000009 accepted=1
+[HeurSol] name=fpr dispatch=8497 worker=0 effort_at=192622 obj=-2800.4431359699997 accepted=1
+[HeurSol] name=fpr dispatch=8497 worker=0 effort_at=225107 obj=-3454.8220270699999 accepted=1
+[HeurSol] name=fpr dispatch=8497 worker=0 effort_at=257681 obj=-3359.0094241300003 accepted=1
+[Sequential] heur=fpr effort=318854
+[HeurSol] name=fpr dispatch=8499 worker=0 effort_at=32574 obj=-3359.0094241300003 accepted=1
+[HeurSol] name=fpr dispatch=8499 worker=0 effort_at=65045 obj=-2499.6160949300001 accepted=1
+[HeurSol] name=fpr dispatch=8499 worker=0 effort_at=68474 obj=-2499.6160949300001 accepted=1
+[HeurSol] name=fpr dispatch=8499 worker=0 effort_at=101728 obj=-2914.8989696699996 accepted=1
+[HeurSol] name=fpr dispatch=8499 worker=0 effort_at=135068 obj=-3359.0094241300003 accepted=1
+[HeurSol] name=fpr dispatch=8499 worker=0 effort_at=159337 obj=-3695.7718186100005 accepted=1
+[HeurSol] name=fpr dispatch=8499 worker=0 effort_at=191825 obj=-2914.8989696699996 accepted=1
+[HeurSol] name=fpr dispatch=8499 worker=0 effort_at=224310 obj=-3454.8220270699999 accepted=1
+[HeurSol] name=fpr dispatch=8499 worker=0 effort_at=256884 obj=-3359.0094241300003 accepted=1
+[Sequential] heur=fpr effort=318975
+[HeurSol] name=fpr dispatch=9659 worker=0 effort_at=32574 obj=-3651.98456313 accepted=1
+[HeurSol] name=fpr dispatch=9659 worker=0 effort_at=65045 obj=-2721.39469723 accepted=1
+[HeurSol] name=fpr dispatch=9659 worker=0 effort_at=68474 obj=-2721.39469723 accepted=1
+[HeurSol] name=fpr dispatch=9659 worker=0 effort_at=101728 obj=-3172.0539491699997 accepted=1
+[HeurSol] name=fpr dispatch=9659 worker=0 effort_at=135068 obj=-3651.98456313 accepted=1
+[HeurSol] name=fpr dispatch=9659 worker=0 effort_at=159808 obj=-3837.9910766500002 accepted=1
+[HeurSol] name=fpr dispatch=9659 worker=0 effort_at=192296 obj=-3172.0539491699997 accepted=1
+[HeurSol] name=fpr dispatch=9659 worker=0 effort_at=224780 obj=-3683.3542870199999 accepted=1
+[HeurSol] name=fpr dispatch=9659 worker=0 effort_at=257354 obj=-3651.98456313 accepted=1
+[Sequential] heur=fpr effort=318527
+final obj=-4783.7333916000143 status=Optimal

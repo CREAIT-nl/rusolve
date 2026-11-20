@@ -1,0 +1,26 @@
+name: Slow solve
+description: A model that rusolve solves much more slowly than HiGHS or another open-source solver
+labels: [performance]
+body:
+  - type: textarea
+    id: model
+    attributes:
+      label: Model
+      description: Attach or link the model file (MPS or LP). Public benchmark instances can be named.
+    validations:
+      required: true
+  - type: textarea
+    id: numbers
+    attributes:
+      label: Timings
+      description: rusolve's command and time, and the comparison solver, its version, command and time, on the same machine.
+      render: text
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: rusolve commit or wheel version, your OS and CPU.
+    validations:
+      required: true

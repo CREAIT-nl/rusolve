@@ -1,0 +1,17 @@
+# highspy 1.15.1 reference duals for the three fixture LPs defined in
+# crates/rusolve-lp/src/simplex.rs::row_duals_match_highspy (models built
+# like tools/diff/simplex_diff.py: addVars/changeColsCost/sense/addRows with
+# row bounds L=(-1e18,rhs) G=(rhs,1e18) E=(rhs,rhs); obj verified equal).
+# HiGHS reports duals in the CALLER objective sense — the SAME convention
+# as SimplexSolution::row_duals/reduced_costs (identity d_j = c_j - pi'a_j),
+# so the comparison needs NO sign flip (see the struct doc-comment, B4).
+# Regenerate: one-off script, highspy 1.15.1, 2026-10-22; values stable.
+min_G objective 10.0
+min_G row_duals 2.0
+min_G col_duals 1.0 0.0
+max_L objective 12.0
+max_L row_duals 3.0
+max_L col_duals -0.0 -1.0
+min_EL_ub objective 7.0
+min_EL_ub row_duals 1.0 -0.0
+min_EL_ub col_duals 0.0 0.0

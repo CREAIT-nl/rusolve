@@ -1,0 +1,10 @@
+{
+  "id": "fixed_charge_supply",
+  "title": "Open warehouses and ship (fixed-charge network)",
+  "kind": "model",
+  "modes": [
+    "python",
+    "highs-mcp"
+  ],
+  "prompt": "Three warehouses can supply four stores. Opening warehouse i costs 100, 150, 120 per month (i = 1, 2, 3) and it can then ship at most 60, 90, 80 units in total. Store demands (units, met exactly) are 30, 25, 40, 35 for stores 1 to 4. The cost per unit shipped from warehouse i to store j is:\n- w1: 4, 6, 9, 5\n- w2: 5, 3, 4, 7\n- w3: 8, 5, 3, 4\nA warehouse that stays closed ships nothing. Minimise the total of opening and shipping costs.\nName the variables `open_i` (0-1) and `ship_i_j` (units, continuous), for example `open_2` and `ship_1_4`.\n\nReport values at the full precision the solver returns.\n\nEnd your final message with one line of the form\nANSWER: {\"status\": \"<solution status string>\", \"objective\": <number>, \"plan\": {\"<variable name>\": <value>, ...}}\nwhere `plan` lists every decision variable named above by exactly the name given (zeros may be left out), and `status` is \"Optimal\" when the solver proves optimality."
+}

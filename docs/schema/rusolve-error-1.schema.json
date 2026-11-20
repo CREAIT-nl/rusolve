@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://rusolve.dev/schema/rusolve-error-1.schema.json",
+  "title": "rusolve.error/1",
+  "description": "A typed model error printed on stdout with --format json when a command refuses a model it could solve wrongly (exit code 3). Router: a class no engine solves yet (kind unsupported_class; class is the router class name: nonconvex_qp, miqp, nonconvex_qcqp, mi_conic or gc_quadratic; reason says why; convexity is set for a quadratic class). The QP front's own refusals (nonconvex_quadratic_objective: Q's smallest eigenvalue, or the largest for a maximisation, and the variables it lives on; miqp_unsupported) are reached only when the router is bypassed, and carry the QPLIB code as class. The message is the stderr text.",
+  "type": "object",
+  "required": ["schema_version", "error"],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": { "const": "rusolve.error/1" },
+    "diagnostics": {
+      "description": "The same refusal as registered diagnostics (rusolve.diagnostics/1 objects, one RS0012 for an unsupported class), so a client reads one shape on every error path. Additive: absent on the QP front's own refusals.",
+      "type": "array",
+      "items": { "type": "object" }
+    },
+    "error": {
+      "type": "object",
+      "required": ["kind", "message", "class"],
+      "properties": {
+        "kind": { "enum": ["nonconvex_quadratic_objective", "miqp_unsupported", "unsupported_class"] },
+        "message": { "type": "string" },
+        "class": { "description": "The router class name for unsupported_class (nonconvex_qp, miqp, nonconvex_qcqp, mi_conic, gc_quadratic); the QPLIB-style code for the QP front's own kinds.", "type": "string" },
+        "reason": { "type": "string" },
+        "convexity": { "enum": ["convex", "nonconvex"] },
+        "eigenvalue": { "type": "number" },
+        "eigenvalue_kind": { "enum": ["smallest", "largest"] },
+        "variables": { "type": "array", "items": { "type": "string" } }
+      }
+    }
+  }
+}

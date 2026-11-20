@@ -1,0 +1,537 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://rusolve.dev/schema/rusolve-probe-1.schema.json",
+  "title": "rusolve.probe/1",
+  "description": "Output of `rusolve probe <model> --format json`: dynamic instance features from a short run on the HiGHS port. One object on stdout; logs go to stderr. `features_version` versions the `features` list (names, order, meaning); it changes whenever any of those changes. Every number is read from what the port already records; fields the port does not record are null and listed under `unavailable`. Objective values are in the user's sense (min or max). A non-finite value is null. The probe makes three Highs::run calls with the options of `rusolve mip` (serial, seed 0): the LP relaxation, the MIP with a node limit of 1 (root phase) and the MIP with the node limit given by --node-limit (default 50); see crates/rusolve-cli/src/features.rs. `--time-limit` (default 60) is a budget shared by the three runs. Sections `presolve`, `root`, `tree` and `bounds` are null for a pure LP.",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "features_version",
+    "solver",
+    "input",
+    "budget",
+    "is_mip",
+    "status",
+    "wall_s",
+    "presolve",
+    "root_lp",
+    "root",
+    "tree",
+    "bounds",
+    "incumbent",
+    "unavailable",
+    "features"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "rusolve.probe/1"
+    },
+    "features_version": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "solver": {
+      "type": "object",
+      "required": [
+        "name",
+        "version",
+        "profile",
+        "engine"
+      ],
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "version": {
+          "type": "string"
+        },
+        "git": {
+          "type": "string"
+        },
+        "profile": {
+          "type": "string"
+        },
+        "engine": {
+          "type": "string"
+        }
+      }
+    },
+    "input": {
+      "type": "object",
+      "required": [
+        "path",
+        "sha256",
+        "rows",
+        "columns",
+        "nonzeros",
+        "integer_columns"
+      ],
+      "properties": {
+        "path": {
+          "type": "string"
+        },
+        "sha256": {
+          "type": "string"
+        },
+        "rows": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "columns": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "nonzeros": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "integer_columns": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "budget": {
+      "type": "object",
+      "required": [
+        "node_limit",
+        "time_limit_s",
+        "seed",
+        "threads"
+      ],
+      "properties": {
+        "node_limit": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "time_limit_s": {
+          "type": "number"
+        },
+        "seed": {
+          "type": "integer"
+        },
+        "threads": {
+          "const": 1
+        }
+      }
+    },
+    "is_mip": {
+      "type": "boolean"
+    },
+    "status": {
+      "description": "Model status of the last run (the node-limited MIP run, or the LP for a pure LP), spelled as in rusolve.result/1. SolutionLimit means the node limit stopped it.",
+      "type": "string"
+    },
+    "wall_s": {
+      "type": "number",
+      "minimum": 0
+    },
+    "presolve": {
+      "description": "The model the MIP solver ended on (after the last restart) against the original.",
+      "type": [
+        "object",
+        "null"
+      ],
+      "required": [
+        "rows_before",
+        "cols_before",
+        "nonzeros_before",
+        "rows_after",
+        "cols_after",
+        "nonzeros_after",
+        "rows_removed",
+        "cols_removed",
+        "nonzeros_removed",
+        "integer_columns_after",
+        "restarts"
+      ],
+      "properties": {
+        "rows_before": {
+          "type": "integer"
+        },
+        "cols_before": {
+          "type": "integer"
+        },
+        "nonzeros_before": {
+          "type": "integer"
+        },
+        "rows_after": {
+          "type": "integer"
+        },
+        "cols_after": {
+          "type": "integer"
+        },
+        "nonzeros_after": {
+          "type": "integer"
+        },
+        "rows_removed": {
+          "type": "integer"
+        },
+        "cols_removed": {
+          "type": "integer"
+        },
+        "nonzeros_removed": {
+          "description": "Negative when presolve added nonzeros.",
+          "type": "integer"
+        },
+        "integer_columns_after": {
+          "type": "integer"
+        },
+        "restarts": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "root_lp": {
+      "type": "object",
+      "required": [
+        "source",
+        "status",
+        "objective",
+        "iterations",
+        "time_s",
+        "integer_columns",
+        "fractional_columns",
+        "fractional_fraction"
+      ],
+      "properties": {
+        "source": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string"
+        },
+        "objective": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "iterations": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "time_s": {
+          "type": "number",
+          "minimum": 0
+        },
+        "integer_columns": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "fractional_columns": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "fractional_fraction": {
+          "type": [
+            "number",
+            "null"
+          ]
+        }
+      }
+    },
+    "root": {
+      "description": "The root phase: MIP presolve, root LP, root cut loop, root heuristics (a run with a node limit of 1).",
+      "type": [
+        "object",
+        "null"
+      ],
+      "required": [
+        "status",
+        "time_s",
+        "lp_iterations_first_root_lp",
+        "lp_iterations_total",
+        "dual_bound_after_cuts",
+        "gap_closed_by_cuts",
+        "cutpool_cuts_alive",
+        "lp_iterations_separation"
+      ],
+      "properties": {
+        "status": {
+          "type": "string"
+        },
+        "time_s": {
+          "type": "number",
+          "minimum": 0
+        },
+        "lp_iterations_first_root_lp": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "lp_iterations_total": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "dual_bound_after_cuts": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "gap_closed_by_cuts": {
+          "description": "(root bound after cuts - root LP objective) / (best incumbent - root LP objective), in the minimisation sense; null without an incumbent or when the incumbent equals the LP objective.",
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "cutpool_cuts_alive": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "lp_iterations_separation": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        }
+      }
+    },
+    "tree": {
+      "type": [
+        "object",
+        "null"
+      ],
+      "required": [
+        "nodes",
+        "nodes_after_root",
+        "leaves",
+        "open_nodes",
+        "open_nodes_max_depth",
+        "tree_phase_time_s",
+        "nodes_per_second",
+        "lp_iterations_total",
+        "lp_iterations_per_node",
+        "separators"
+      ],
+      "properties": {
+        "nodes": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "nodes_after_root": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "leaves": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "open_nodes": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "open_nodes_max_depth": {
+          "description": "Depth of the deepest open node at the end, a lower bound on the depth reached; null when no node is open.",
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "tree_phase_time_s": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "nodes_per_second": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "lp_iterations_total": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "lp_iterations_heuristics": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "lp_iterations_separation": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "lp_iterations_strong_branching": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "lp_iterations_per_node": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "separators": {
+          "description": "Per-separator counters of the worker's separation object (tree phase only).",
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "object",
+            "required": [
+              "name",
+              "calls",
+              "cuts_found"
+            ],
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "calls": {
+                "type": "integer"
+              },
+              "cuts_found": {
+                "type": "integer"
+              }
+            }
+          }
+        }
+      }
+    },
+    "bounds": {
+      "type": [
+        "object",
+        "null"
+      ],
+      "required": [
+        "primal_bound",
+        "dual_bound",
+        "gap",
+        "root_lp_objective",
+        "root_bound_after_cuts"
+      ],
+      "properties": {
+        "primal_bound": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "dual_bound": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "gap": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "root_lp_objective": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "root_bound_after_cuts": {
+          "type": [
+            "number",
+            "null"
+          ]
+        }
+      }
+    },
+    "incumbent": {
+      "type": "object",
+      "required": [
+        "found",
+        "improving_solutions",
+        "first_time_s",
+        "first_source"
+      ],
+      "properties": {
+        "found": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "improving_solutions": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "first_time_s": {
+          "type": "null"
+        },
+        "first_source": {
+          "type": "null"
+        }
+      }
+    },
+    "unavailable": {
+      "description": "Features the port does not record, each with the reason.",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "feature",
+          "reason"
+        ],
+        "properties": {
+          "feature": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "features": {
+      "description": "The compact vector for a tuner, fixed order per features_version. null where a feature does not apply (pure LP, solved in presolve, no tree).",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "name",
+          "value",
+          "description"
+        ],
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "value": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "description": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  }
+}

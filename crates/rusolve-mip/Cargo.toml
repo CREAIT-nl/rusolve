@@ -1,0 +1,12 @@
+[package]
+name = "rusolve-mip"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+rusolve-core = { workspace = true }
+rusolve-io = { workspace = true }
+rusolve-lp = { workspace = true }
+rusolve-ekk = { workspace = true }

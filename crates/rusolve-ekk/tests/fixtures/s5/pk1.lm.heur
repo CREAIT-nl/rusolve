@@ -1,0 +1,8 @@
+[HeurSol] name=local_mip dispatch=1 worker=0 effort_at=67613 obj=118 accepted=1
+[HeurSol] name=local_mip dispatch=1 worker=0 effort_at=893059 obj=155 accepted=1
+[Sequential] heur=local_mip effort=1152536
+[HeurSol] name=local_mip dispatch=171 worker=0 effort_at=1830 obj=17.999998999999999 accepted=1
+[Sequential] heur=local_mip effort=770538
+[HeurSol] name=local_mip dispatch=199 worker=0 effort_at=1830 obj=17.999998999999999 accepted=1
+[Sequential] heur=local_mip effort=770538
+final obj=11.000000000000167 status=Optimal

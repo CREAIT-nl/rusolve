@@ -1,0 +1,29 @@
+[workspace]
+resolver = "2"
+members = ["crates/rusolve-core", "crates/rusolve-io", "crates/rusolve-lp", "crates/rusolve-mip", "crates/rusolve-cli", "crates/rusolve-ekk", "crates/rusolve-py", "crates/rusolve-wasm", "crates/rusolve-model"]
+# rusolve-py needs a Python interpreter to build: only `-p rusolve-py` or maturin builds it
+default-members = ["crates/rusolve-core", "crates/rusolve-io", "crates/rusolve-lp", "crates/rusolve-mip", "crates/rusolve-cli", "crates/rusolve-ekk", "crates/rusolve-wasm", "crates/rusolve-model"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+license = "BUSL-1.1"
+repository = "https://github.com/CREAIT-nl/rusolve"
+
+[workspace.dependencies]
+rusolve-core = { path = "crates/rusolve-core" }
+rusolve-io = { path = "crates/rusolve-io" }
+rusolve-lp = { path = "crates/rusolve-lp" }
+rusolve-mip = { path = "crates/rusolve-mip" }
+rusolve-ekk = { path = "crates/rusolve-ekk" }
+rusolve-wasm = { path = "crates/rusolve-wasm" }
+rusolve-model = { path = "crates/rusolve-model" }
+criterion = "0.8"
+
+# Shipped binaries: build with `--profile dist` (fat LTO, one codegen unit).
+# Same IEEE operation order as release, so results are bit-identical; a few percent faster.
+# Day-to-day development keeps `release` (fat LTO makes the build several minutes longer).
+[profile.dist]
+inherits = "release"
+lto = "fat"
+codegen-units = 1

@@ -1,0 +1,12 @@
+[package]
+name = "rusolve-wasm"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Fuel-metered WebAssembly sandbox for agent-written MIP hooks"
+
+[dependencies]
+rusolve-ekk.workspace = true
+wasmi = "2.0.0"
+wat = "1"

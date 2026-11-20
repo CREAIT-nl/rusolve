@@ -1,0 +1,653 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://rusolve.dev/schema/rusolve-result-1.schema.json",
+  "title": "rusolve.result/1",
+  "description": "The result envelope `rusolve mip --format json` writes as the one JSON object on stdout. Written by crates/rusolve-cli/src/envelope.rs. Solver logs never appear on stdout in this mode: with output_flag=true they go to stderr. Numbers: JSON has no inf/nan, so a non-finite solver value (a dual bound of -inf before the first incumbent, a gap of inf with no incumbent, an unlimited time_limit) is null. An agent that must distinguish 'no incumbent' from 'unbounded bound' reads has_solution together with dual_bound.",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "solver",
+    "input",
+    "status",
+    "objective",
+    "dual_bound",
+    "gap",
+    "has_solution",
+    "stats",
+    "run"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "description": "The version tag of this envelope. Breaking changes bump it and ship a new schema file.",
+      "const": "rusolve.result/1"
+    },
+    "solver": {
+      "description": "What produced the result.",
+      "type": "object",
+      "required": ["name", "version", "profile", "engine"],
+      "additionalProperties": false,
+      "properties": {
+        "name": { "const": "rusolve" },
+        "version": {
+          "description": "The rusolve-cli crate version (CARGO_PKG_VERSION).",
+          "type": "string"
+        },
+        "git": {
+          "description": "The commit the binary was built from: `git rev-parse --short=12 HEAD`, with `-dirty` appended when tracked files had uncommitted changes (captured by crates/rusolve-cli/build.rs). Omitted when the build had no git (a source tarball).",
+          "type": "string"
+        },
+        "profile": {
+          "description": "The option profile in force, from RUSOLVE_PROFILE: `recommended` (the default) or `highs-1.15.1` (HiGHS 1.15.1 semantics, every rusolve-specific option off). Set the same variable to rerun.",
+          "enum": ["recommended", "highs-1.15.1"]
+        },
+        "engine": {
+          "description": "Which solver stack ran the model. 'highs-port' is crates/rusolve-ekk, the faithful HiGHS translation (RUSOLVE_MIP_HIGHS=1 for `mip`, the default for `solve`). 'native' is the rusolve-mip / rusolve-lp stack (the default for `mip`, --legacy-lp / --ipm for `solve`). 'clarabel' is the interior-point conic route for continuous SOCP and convex QCQP models (crates/rusolve-cli/src/conic_solve.rs); it adds the `conic` object. Both others print the same envelope; `run.options` is empty on the native stack, which has no HiGHS option registry.",
+          "enum": ["highs-port", "native", "clarabel"]
+        }
+      }
+    },
+    "input": {
+      "description": "The model as read, before presolve.",
+      "type": "object",
+      "required": ["path", "sha256", "rows", "cols", "integer_cols", "nonzeros"],
+      "additionalProperties": false,
+      "properties": {
+        "path": { "type": "string" },
+        "edits_applied": {
+          "description": "Only from the MCP server: the number of `modify` edits applied to the model handle since it was loaded. When present and positive, `path` names the handle (`<model_id> (edited)`) and `sha256` is the SHA-256 of a canonical dump of the edited model, not of a file.",
+          "type": "integer",
+          "minimum": 0
+        },
+        "sha256": {
+          "description": "SHA-256, lower-case hex, of the model file's bytes exactly as read from disk: for a `.gz` model these are the compressed bytes, so `shasum -a 256 <file>` reproduces it.",
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "rows": {
+          "description": "HighsLp::num_row_: constraint rows. The MPS objective (N) row is not one of them.",
+          "type": "integer",
+          "minimum": 0
+        },
+        "cols": { "type": "integer", "minimum": 0 },
+        "integer_cols": {
+          "description": "Columns with HighsVarType::kInteger in HighsLp::integrality_. 0 for a pure LP, including a model whose integrality_ vector is empty.",
+          "type": "integer",
+          "minimum": 0
+        },
+        "nonzeros": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "status": {
+      "description": "Closed enum, one value per HighsModelStatus (the full mapping, with reasons, is the doc comment of envelope::result_status). HiGHS's kSolutionLimit is set by mip_max_nodes, mip_max_leaves, mip_max_improving_sols and mip_max_stall_nodes: it is reported as 'NodeLimit' when the node count reached mip_max_nodes and as 'SolutionLimit' otherwise. 'Error' also covers the case where Highs::run returned HighsStatus::kError. The five HiGHS error statuses share 'Error'; the limit-like and exceptional ones keep their own name so an agent never has to guess between a stopped solve and a broken one.",
+      "enum": [
+        "Optimal",
+        "Infeasible",
+        "Unbounded",
+        "InfeasibleOrUnbounded",
+        "TimeLimit",
+        "IterationLimit",
+        "NodeLimit",
+        "SolutionLimit",
+        "Interrupted",
+        "NotSolved",
+        "Unknown",
+        "MemoryLimit",
+        "ModelEmpty",
+        "ObjectiveBound",
+        "ObjectiveTarget",
+        "Error"
+      ]
+    },
+    "objective": {
+      "description": "The objective of the reported solution, including the model offset (HighsInfo::objective_function_value). null when there is no solution or the value is not finite.",
+      "type": ["number", "null"]
+    },
+    "dual_bound": {
+      "description": "HighsInfo::mip_dual_bound, in the minimisation sense HiGHS reports it in, whatever the model's objective sense. null when infinite, which with has_solution false means no incumbent had been found yet.",
+      "type": ["number", "null"]
+    },
+    "gap": {
+      "description": "HighsInfo::mip_gap, the relative gap HiGHS computes in HighsMipSolverData::limitsToGap. A fraction, not a percentage: 0.01 is 1%. null when infinite (no incumbent).",
+      "type": ["number", "null"]
+    },
+    "qp": {
+      "description": "Convex QP: present only when the model has a quadratic objective (a Hessian). The check that ran before the engine: the QPLIB-style class code (objective, variables, constraints; Furini et al. 2019), the convexity verdict, how it was reached, the diagonal shift added for a Q that was indefinite by rounding only, and the engine that solved it.",
+      "type": "object",
+      "required": ["class", "convexity", "method", "shift", "min_eigenvalue_estimate", "hessian_nonzeros", "engine", "engine_selection", "fallback", "fallback_from_status"],
+      "additionalProperties": false,
+      "properties": {
+        "class": { "type": "string", "pattern": "^[LDCQU][CBIMG][NBL]$" },
+        "convexity": { "enum": ["convex", "convex_after_shift", "unverified"] },
+        "method": { "enum": ["empty", "diagonal", "gershgorin", "ldlt", "lanczos"] },
+        "shift": { "description": "Added to the diagonal of Q (subtracted for a maximisation) before solving; 0 when none.", "type": "number" },
+        "min_eigenvalue_estimate": { "description": "Smallest eigenvalue of Q (of -Q for a maximisation) when a failed test produced an estimate; null otherwise.", "type": ["number", "null"] },
+        "hessian_nonzeros": { "description": "Nonzeros of the symmetrised Q, both triangles.", "type": "integer", "minimum": 0 },
+        "engine": { "description": "The engine that produced the answer.", "enum": ["quass", "hipo"] },
+        "engine_selection": { "description": "default: HiPO first, QUASS when HiPO does not end Optimal. user: the solver option was named and is honoured as given.", "enum": ["default", "user"] },
+        "fallback": { "description": "true when HiPO did not end Optimal and QUASS produced the answer.", "type": "boolean" },
+        "fallback_from_status": { "description": "The status HiPO ended with when fallback is true; null otherwise.", "type": ["string", "null"] }
+      }
+    },
+    "class": {
+      "description": "The problem class the router assigned, the same name `rusolve classify --format json` reports. For a plain LP or MIP, which the router does not read, it is `mip` when the model has integer columns and `lp` otherwise (`rusolve solve` on a MIP solves the relaxation and says `lp`).",
+      "enum": ["lp", "mip", "convex_qp", "conic", "gc", "gc_mip"]
+    },
+    "engine": {
+      "description": "The engine that solved the class: `highs-port` or `native` for LP and MIP (as solver.engine), `hipo` or `quass` for a convex QP (the same name as `qp.engine`; the selection and any fallback are in the `qp` object), `clarabel` for conic and convex QCQP, `gc-linearization` for general constraints (linearized, then the HiGHS port). solver.engine stays the stack that ran.",
+      "type": "string"
+    },
+    "convexity": {
+      "description": "`convex` for a solved quadratic class (convex QP, conic); absent for a linear class. A nonconvex model is refused (rusolve.error/1), never solved.",
+      "enum": ["convex"]
+    },
+    "diagnostics": {
+      "description": "Present only when there is one: lint warnings found before the solve (RS2001 weak big-M, RS2002 coefficient range, RS2003 huge or free column; off with --no-warnings), the infeasible set of rows (RS2010) or primal ray (RS2011) of an Infeasible or Unbounded result, and a violated row of the returned solution (RS2012). Each item is a rusolve.diagnostics/1 diagnostic (docs/schema/rusolve-diagnostics-1.schema.json); codes are explained by `rusolve --explain`.",
+      "type": "array",
+      "items": { "type": "object", "required": ["code", "severity", "message", "notes", "help"] }
+    },
+    "limit": {
+      "description": "Present when a limit or an interrupt ended the solve (status TimeLimit, NodeLimit, SolutionLimit, IterationLimit, MemoryLimit, ObjectiveBound, ObjectiveTarget or Interrupted). The incumbent, bound and gap are the top-level objective, dual_bound and gap.",
+      "type": "object",
+      "required": ["kind", "enforced_by", "improving"],
+      "additionalProperties": false,
+      "properties": {
+        "kind": { "enum": ["time", "node", "solution", "iteration", "memory", "objective_bound", "objective_target", "interrupt"] },
+        "enforced_by": {
+          "description": "solver: HiGHS checked the limit itself. watchdog_interrupt: the wall-clock watchdog (--watchdog) requested the interrupt callback and the solve ended at its next limit check; status is TimeLimit. watchdog_kill: the solve did not react within the grace period (--watchdog-grace), so the watchdog reported the last state the callbacks saw (no solution, nodes and LP iterations as of the last callback) and ended the process with exit code 0.",
+          "enum": ["solver", "watchdog_interrupt", "watchdog_kill"]
+        },
+        "improving": {
+          "description": "Whether the incumbent was still improving. Tracked only with --log-format jsonl or --watchdog (they register the improving-solution callback); otherwise tracked is false and the other fields are null.",
+          "type": "object",
+          "required": ["tracked", "count", "last_improvement_s", "since_last_improvement_s", "still_improving"],
+          "additionalProperties": false,
+          "properties": {
+            "tracked": { "type": "boolean" },
+            "count": { "description": "Improving solutions seen.", "type": ["integer", "null"] },
+            "last_improvement_s": { "description": "Seconds from the solve start to the last improving solution; null when none.", "type": ["number", "null"] },
+            "since_last_improvement_s": { "description": "stats.time_s minus last_improvement_s.", "type": ["number", "null"] },
+            "still_improving": { "description": "A reporting convenience: an incumbent exists and the last improvement came within the last tenth of the run.", "type": ["boolean", "null"] }
+          }
+        }
+      }
+    },
+    "has_solution": {
+      "description": "HighsSolution::value_valid: an incumbent primal solution exists and solution.columns describes it.",
+      "type": "boolean"
+    },
+    "stats": {
+      "type": "object",
+      "required": ["nodes", "lp_iterations", "time_s", "work"],
+      "additionalProperties": false,
+      "properties": {
+        "nodes": {
+          "description": "HighsInfo::mip_node_count.",
+          "type": "integer",
+          "minimum": 0
+        },
+        "lp_iterations": {
+          "description": "HighsInfo::simplex_iteration_count: the total LP iterations over the tree, the number the CSV line reports in field 5.",
+          "type": "integer",
+          "minimum": 0
+        },
+        "time_s": {
+          "description": "Wall-clock seconds of read + solve + report. Not reproducible across runs; everything else in this envelope is reproducible at threads=1.",
+          "type": "number",
+          "minimum": 0
+        },
+        "work": {
+          "description": "Deterministic work of the MIP solve in simplex synthetic ticks. The same model, options and seed give the same value on every run and machine at threads=1. 0 when the model took no MIP path.",
+          "type": "integer",
+          "minimum": 0
+        },
+        "phases": {
+          "description": "Per-phase statistics of the MIP solve (rusolve-ekk mip/mip_stats.rs). Every *_s field is wall time and varies between runs; everything else is reproducible at threads=1. Absent when the model took no MIP path.",
+          "type": "object",
+          "required": ["presolve", "setup", "root", "cuts", "heuristics", "search", "lp_iterations", "work", "first_incumbent", "primal_dual_integral", "total_time_s"],
+          "additionalProperties": false,
+          "properties": {
+            "presolve": {
+              "type": "object",
+              "required": ["time_s", "status", "restarts", "rows_before", "cols_before", "nonzeros_before", "rows_after", "cols_after", "nonzeros_after", "reductions"],
+              "additionalProperties": false,
+              "properties": {
+                "time_s": {"type": "number", "minimum": 0},
+                "status": {"description": "HighsPresolveStatus of the last MIP presolve.", "type": "string"},
+                "restarts": {"description": "HighsMipSolverData::num_restarts.", "type": "integer", "minimum": 0},
+                "rows_before": {"type": "integer", "minimum": 0},
+                "cols_before": {"type": "integer", "minimum": 0},
+                "nonzeros_before": {"type": "integer", "minimum": 0},
+                "rows_after": {"description": "Of the presolved model the search ran on (the last one after restarts).", "type": "integer", "minimum": 0},
+                "cols_after": {"type": "integer", "minimum": 0},
+                "nonzeros_after": {"type": "integer", "minimum": 0},
+                "reductions": {
+                  "description": "Entries of the postsolve stack by reduction type (FixedCol, RedundantRow, DoubletonEquation, ...). Bound tightenings and coefficient changes leave no entry.",
+                  "type": "object",
+                  "additionalProperties": {"type": "integer", "minimum": 0}
+                }
+              }
+            },
+            "setup": {
+              "type": "object",
+              "required": ["time_s"],
+              "additionalProperties": false,
+              "properties": {"time_s": {"type": "number", "minimum": 0}}
+            },
+            "root": {
+              "type": "object",
+              "required": ["lp_iterations", "lp_objective", "node_time_s"],
+              "additionalProperties": false,
+              "properties": {
+                "lp_iterations": {"description": "HighsMipSolverData::firstrootlpiters: LP iterations of the first root LP solve.", "type": "integer", "minimum": 0},
+                "lp_objective": {"description": "HighsMipSolverData::firstlpsolobj; null when no root LP was solved.", "type": ["number", "null"]},
+                "node_time_s": {"description": "Wall seconds in the root node: root LP, root separation and root heuristics (the port has no separate clock for them).", "type": "number", "minimum": 0}
+              }
+            },
+            "cuts": {
+              "type": "object",
+              "required": ["rounds", "pool_cuts", "separators"],
+              "additionalProperties": false,
+              "properties": {
+                "rounds": {"description": "HighsSeparation::separationRound calls (root and tree) of the top-level MIP.", "type": "integer", "minimum": 0},
+                "pool_cuts": {"description": "Cuts in the global cut pool at the end.", "type": "integer", "minimum": 0},
+                "separators": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "required": ["name", "calls", "cuts_found", "time_s"],
+                    "additionalProperties": false,
+                    "properties": {
+                      "name": {"type": "string"},
+                      "calls": {"description": "HighsSeparator::numCalls.", "type": "integer", "minimum": 0},
+                      "cuts_found": {"description": "HighsSeparator::numCutsFound: cuts the separator put in the pool.", "type": "integer", "minimum": 0},
+                      "time_s": {"type": "number", "minimum": 0}
+                    }
+                  }
+                }
+              }
+            },
+            "heuristics": {
+              "type": "object",
+              "required": ["improving_incumbents_by_source"],
+              "additionalProperties": false,
+              "properties": {
+                "improving_incumbents_by_source": {
+                  "description": "Incumbents that improved the upper bound, by HighsMipSolverData::solutionSourceToString. Heuristic calls are not counted by the port.",
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "required": ["source", "improving_incumbents"],
+                    "additionalProperties": false,
+                    "properties": {
+                      "source": {"type": "string"},
+                      "improving_incumbents": {"type": "integer", "minimum": 1}
+                    }
+                  }
+                }
+              }
+            },
+            "search": {
+              "type": "object",
+              "required": ["time_s", "nodes", "leaves"],
+              "additionalProperties": false,
+              "properties": {
+                "time_s": {"description": "Wall seconds after the root node returned; 0 when the solve ended earlier.", "type": "number", "minimum": 0},
+                "nodes": {"type": "integer", "minimum": 0},
+                "leaves": {"type": "integer", "minimum": 0}
+              }
+            },
+            "lp_iterations": {
+              "type": "object",
+              "required": ["total", "strong_branching", "separation", "heuristics"],
+              "additionalProperties": false,
+              "properties": {
+                "total": {"type": "integer", "minimum": 0},
+                "strong_branching": {"type": "integer", "minimum": 0},
+                "separation": {"type": "integer", "minimum": 0},
+                "heuristics": {"type": "integer", "minimum": 0},
+                "by_source": {
+                  "description": "LP simplex iterations and LP solves by what asked for the solve (root, root/tree separation, strong branching, node re-solves by origin and depth, each heuristic family, untagged), sub-MIPs included. Reporting only; sources with no solve are omitted.",
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "object",
+                    "required": ["iterations", "solves"],
+                    "additionalProperties": false,
+                    "properties": {
+                      "iterations": {"type": "integer", "minimum": 0},
+                      "solves": {"type": "integer", "minimum": 0}
+                    }
+                  }
+                }
+              }
+            },
+            "work": {
+              "description": "The parts of stats.work: work = simplex_ticks + unit_ticks * (propagation_units + feasibility_jump_units + presolve_units).",
+              "type": "object",
+              "required": ["simplex_ticks", "propagation_units", "feasibility_jump_units", "presolve_units", "unit_ticks"],
+              "additionalProperties": false,
+              "properties": {
+                "simplex_ticks": {"description": "HiGHS simplex synthetic ticks (INVERT build + per-iteration FTRAN/BTRAN/update).", "type": "integer", "minimum": 0},
+                "propagation_units": {"description": "Column nonzeros walked by HighsDomain activity updates (propagation, probing).", "type": "integer", "minimum": 0},
+                "feasibility_jump_units": {"description": "FeasibilityJump totalEffort (nonzeros touched), HiGHS's own effort count for that heuristic.", "type": "integer", "minimum": 0},
+                "presolve_units": {"description": "Row nonzeros walked by HPresolve::getRowPositions, the presolve loops' row traversal.", "type": "integer", "minimum": 0},
+                "unit_ticks": {"description": "Ticks per propagation, presolve or FeasibilityJump unit.", "type": "integer", "minimum": 0}
+              }
+            },
+            "first_incumbent": {
+              "description": "Wall time and work when the first incumbent was found; null if none.",
+              "type": ["object", "null"],
+              "required": ["time_s", "work"],
+              "additionalProperties": false,
+              "properties": {
+                "time_s": {"type": "number", "minimum": 0},
+                "work": {"type": "integer", "minimum": 0}
+              }
+            },
+            "propagation_events": {
+              "description": "Reporting-only tallies of objective propagation and reduced-cost fixing in the MIP solve, sub-MIPs included: runs, bound changes (domain-change stack growth) and cutoffs; and of conflict analysis by source (conf_*_tree/heur/inflp/boundlp/degen: calls, explained, conflicts added to the pool, literals added). They never feed work or the search.",
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "objprop_runs": {"type": "integer", "minimum": 0},
+                "objprop_bound_changes": {"type": "integer", "minimum": 0},
+                "objprop_cutoffs": {"type": "integer", "minimum": 0},
+                "redcost_local_runs": {"type": "integer", "minimum": 0},
+                "redcost_local_bound_changes": {"type": "integer", "minimum": 0},
+                "redcost_local_cutoffs": {"type": "integer", "minimum": 0},
+                "redcost_root_runs": {"type": "integer", "minimum": 0},
+                "redcost_root_bound_changes": {"type": "integer", "minimum": 0},
+                "conf_calls_tree": {"type": "integer", "minimum": 0},
+                "conf_calls_heur": {"type": "integer", "minimum": 0},
+                "conf_calls_inflp": {"type": "integer", "minimum": 0},
+                "conf_calls_boundlp": {"type": "integer", "minimum": 0},
+                "conf_calls_degen": {"type": "integer", "minimum": 0},
+                "conf_explained_tree": {"type": "integer", "minimum": 0},
+                "conf_explained_heur": {"type": "integer", "minimum": 0},
+                "conf_explained_inflp": {"type": "integer", "minimum": 0},
+                "conf_explained_boundlp": {"type": "integer", "minimum": 0},
+                "conf_explained_degen": {"type": "integer", "minimum": 0},
+                "conf_added_tree": {"type": "integer", "minimum": 0},
+                "conf_added_heur": {"type": "integer", "minimum": 0},
+                "conf_added_inflp": {"type": "integer", "minimum": 0},
+                "conf_added_boundlp": {"type": "integer", "minimum": 0},
+                "conf_added_degen": {"type": "integer", "minimum": 0},
+                "conf_len_tree": {"type": "integer", "minimum": 0},
+                "conf_len_heur": {"type": "integer", "minimum": 0},
+                "conf_len_inflp": {"type": "integer", "minimum": 0},
+                "conf_len_boundlp": {"type": "integer", "minimum": 0},
+                "conf_len_degen": {"type": "integer", "minimum": 0},
+                "conf_prop_bound_changes": {"type": "integer", "minimum": 0},
+                "conf_prop_cutoffs": {"type": "integer", "minimum": 0},
+                "conf_cuts_added": {"type": "integer", "minimum": 0},
+                "conf_removed": {"type": "integer", "minimum": 0}
+              }
+            },
+            "primal_dual_integral": {"type": ["number", "null"]},
+            "total_time_s": {"type": "number", "minimum": 0}
+          }
+        },
+        "wasm": {
+          "description": "Present only when a Wasm hook component was loaded for this run (`rusolve mip --wasm-hook`, MCP solve `wasm_hook`; crates/rusolve-wasm, docs/design/wasm-hooks.md). The component name (its file stem) and the call counters: every call is exactly one of ok, declined (valid 'no opinion'), traps, out_of_fuel or invalid (out-of-range/NaN), plus total fuel consumed. A component can only reorder the search, never change the answer.",
+          "type": "object",
+          "required": ["component", "calls", "ok", "declined", "traps", "out_of_fuel", "invalid", "fuel_used"],
+          "additionalProperties": false,
+          "properties": {
+            "component": {"description": "The component name: the file stem of the loaded .wasm/.wat file.", "type": "string"},
+            "calls": {"type": "integer", "minimum": 0},
+            "ok": {"description": "Calls whose answer the solver used.", "type": "integer", "minimum": 0},
+            "declined": {"description": "Valid 'no opinion' answers (branch_score nonzero, cut_score NaN, select_node -1, or the records not fitting the memory cap).", "type": "integer", "minimum": 0},
+            "traps": {"type": "integer", "minimum": 0},
+            "out_of_fuel": {"type": "integer", "minimum": 0},
+            "invalid": {"description": "Wrong-shape answers (NaN score, out-of-range node index).", "type": "integer", "minimum": 0},
+            "fuel_used": {"description": "Total interpreter fuel consumed over all calls.", "type": "integer", "minimum": 0}
+          }
+        }
+      }
+    },
+    "run": {
+      "description": "How the solve was asked for, so it can be asked for again.",
+      "type": "object",
+      "required": ["seed", "threads", "time_limit", "node_limit", "options"],
+      "additionalProperties": false,
+      "properties": {
+        "seed": { "type": "integer" },
+        "threads": {
+          "description": "The threads option in force. The port MIP path pins threads=1 for reproducibility; --threads is not accepted there.",
+          "type": "integer",
+          "minimum": 1
+        },
+        "time_limit": {
+          "description": "Seconds, null when unlimited (the HiGHS default).",
+          "type": ["number", "null"]
+        },
+        "node_limit": {
+          "description": "mip_max_nodes, null when --node-limit was not given.",
+          "type": ["integer", "null"]
+        },
+        "options": {
+          "description": "The --opt key=value settings as given, values as strings. A repeated key keeps the last value, which is what the solver kept. Options left at their profile default are not echoed here.",
+          "type": "object",
+          "additionalProperties": { "type": "string" }
+        }
+      }
+    },
+    "general_constraints": {
+      "description": "Present when the model has general constraints (indicator, SOS, piecewise-linear, min/max/abs/and/or, semi-continuous): what was linearized (added_columns, added_rows, objects by kind, the route per object), and whether the answer was checked against the user's objects (verified, violations).",
+      "type": "object"
+    },
+    "conic": {
+      "description": "Present only when solver.engine is 'clarabel' (a model with quadratic constraints or cones). clarabel_status is Clarabel's own status; reduced_accuracy is true for its Almost* statuses. For a solution: objective_primal / objective_dual (model sense, offset included), checker (the `rusolve check` verdict on the user's rows and cones at the stated tolerance), row_duals (d objective / d rhs of each constraint row, in the model's sense, by name) and cone_duals (the dual vector of each user cone). For Infeasible or Unbounded: certificate, the Farkas vector or the unbounded ray, with `verified` set by checking it on the conic form; a certificate that does not verify turns the status into Unknown.",
+      "type": "object",
+      "required": ["engine", "clarabel_version", "clarabel_status", "reduced_accuracy", "iterations", "conic_rows", "r_prim", "r_dual"],
+      "properties": {
+        "engine": { "const": "clarabel" },
+        "clarabel_version": { "type": "string" },
+        "clarabel_status": { "type": "string" },
+        "reduced_accuracy": { "type": "boolean" },
+        "iterations": { "type": "integer", "minimum": 0 },
+        "conic_rows": { "type": "integer", "minimum": 0 },
+        "r_prim": { "type": ["number", "null"] },
+        "r_dual": { "type": ["number", "null"] },
+        "objective_primal": { "type": ["number", "null"] },
+        "objective_dual": { "type": ["number", "null"] },
+        "checker": { "type": "object" },
+        "row_duals": { "type": "array" },
+        "cone_duals": { "type": "array" },
+        "certificate": { "type": "object" }
+      }
+    },
+    "solution": {
+      "description": "The incumbent, in original-model space after postsolve. Present only when --solution or --include-solution was given, so the default envelope stays small on a model with thousands of columns.",
+      "type": "object",
+      "required": ["columns"],
+      "additionalProperties": false,
+      "properties": {
+        "columns": {
+          "description": "One entry per column of the model as read, in column order. Names are the model's own; a model that came in without a name for some column gets HiGHS's minimal generated name (c0, c1, ...). Empty when has_solution is false.",
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["name", "value"],
+            "additionalProperties": false,
+            "properties": {
+              "name": { "type": "string" },
+              "value": { "type": "number" }
+            }
+          }
+        }
+      }
+    },
+    "start": {
+      "description": "Present only with --start <file> (read side; crates/rusolve-cli/src/warm.rs). The MIP start, matched to the model by column name and passed through the ported Highs::setSolution. A complete start is checked first and an infeasible one is an input error (exit 3), so a start that appears here was accepted.",
+      "type": "object",
+      "required": [
+        "path",
+        "format",
+        "columns_given",
+        "complete",
+        "accepted",
+        "objective",
+        "became_incumbent",
+        "final_incumbent_is_start",
+        "improved_on_start"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "path": {
+          "type": "string"
+        },
+        "format": {
+          "enum": [
+            "highs-raw",
+            "json"
+          ]
+        },
+        "columns_given": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "complete": {
+          "description": "True when the start names every column; a partial start is completed by the solver.",
+          "type": "boolean"
+        },
+        "accepted": {
+          "type": "boolean"
+        },
+        "objective": {
+          "description": "Objective of a complete start (model sense, offset included); null for a partial one.",
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "became_incumbent": {
+          "description": "True when the feasible complete start was installed as the first incumbent (HighsMipSolverData::checkAddSolution); null for a partial start.",
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "final_incumbent_is_start": {
+          "description": "True when the final incumbent equals the start (1e-9); null for a partial start.",
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "improved_on_start": {
+          "description": "True when the final objective is strictly better than the start's; null for a partial start.",
+          "type": [
+            "boolean",
+            "null"
+          ]
+        }
+      }
+    },
+    "added_rows": {
+      "description": "Present only with --add-rows <file>. Rows added to the model before the solve; each passed the validity gate (malformed rows always rejected; rows that cut off the mip_debug_solution_file solution rejected when it is set). input.rows counts the added rows; input.sha256 is the model file's.",
+      "type": "object",
+      "required": [
+        "path",
+        "format",
+        "requested",
+        "added",
+        "accepted",
+        "rejected",
+        "debug_solution_gate",
+        "accepted_names",
+        "rejected_rows"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "path": {
+          "type": "string"
+        },
+        "format": {
+          "enum": [
+            "mps-fragment",
+            "json"
+          ]
+        },
+        "requested": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "added": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "accepted": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "rejected": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "debug_solution_gate": {
+          "description": "True when mip_debug_solution_file was set, so the gate could prove a row invalid.",
+          "type": "boolean"
+        },
+        "accepted_names": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "rejected_rows": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "name",
+              "reason"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "reason": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      }
+    },
+    "basis": {
+      "description": "Present only with --basis <file> (read side): a HiGHS basis file read as readBasisStream does.",
+      "type": "object",
+      "required": [
+        "path",
+        "format",
+        "read",
+        "installed",
+        "note"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "path": {
+          "type": "string"
+        },
+        "format": {
+          "enum": [
+            "v1",
+            "v2"
+          ]
+        },
+        "read": {
+          "type": "boolean"
+        },
+        "installed": {
+          "description": "False for a model with integer columns: the port's MIP solve does not use a basis.",
+          "type": "boolean"
+        },
+        "note": {
+          "type": "string"
+        }
+      }
+    }
+  }
+}

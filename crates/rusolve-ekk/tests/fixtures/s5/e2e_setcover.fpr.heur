@@ -1,0 +1,12 @@
+[HeurSol] name=fpr dispatch=1 worker=0 effort_at=306 obj=42 accepted=1
+[HeurSol] name=fpr dispatch=1 worker=0 effort_at=612 obj=42 accepted=1
+[HeurSol] name=fpr dispatch=1 worker=0 effort_at=918 obj=42 accepted=1
+[HeurSol] name=fpr dispatch=1 worker=0 effort_at=1224 obj=42 accepted=1
+[HeurSol] name=fpr dispatch=1 worker=0 effort_at=1530 obj=42 accepted=1
+[HeurSol] name=fpr dispatch=1 worker=0 effort_at=1836 obj=42 accepted=1
+[HeurSol] name=fpr dispatch=1 worker=0 effort_at=2142 obj=42 accepted=1
+[HeurSol] name=fpr dispatch=1 worker=0 effort_at=2448 obj=42 accepted=1
+[HeurSol] name=fpr dispatch=1 worker=0 effort_at=2754 obj=42 accepted=1
+[HeurSol] name=fpr dispatch=1 worker=0 effort_at=3060 obj=42 accepted=1
+[Sequential] heur=fpr effort=45288
+final obj=26 status=Optimal

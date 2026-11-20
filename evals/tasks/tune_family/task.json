@@ -1,0 +1,6 @@
+{
+  "id": "tune_family",
+  "title": "Tune the solver for a problem family",
+  "kind": "tune",
+  "prompt": "{dir}/inst1.mps, inst2.mps and inst3.mps are three instances of one problem family (multi-dimensional 0-1 knapsack). With default settings they take about 2600 branch-and-bound nodes in total. Using the rusolve tools, find solver option settings that cut the total node count over the three instances to at most 80% of the default while every instance still ends with status Optimal and an objective within 1% of the default-settings optimum. Use only options from rusolve's option registry (HiGHS option names, as in the `solve` tool's `options` map). Do not set time or node limits.\n\nEnd your final message with one line of the form\nANSWER: {\"options\": {\"<option name>\": <value>, ...}}"
+}

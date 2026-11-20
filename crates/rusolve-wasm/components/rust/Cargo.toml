@@ -1,0 +1,21 @@
+[package]
+name = "rusolve-wasm-components"
+version = "0.1.0"
+edition = "2021"
+description = "ABI v1 Wasm hook components written in Rust; built by tools/build_wasm_components.sh, not part of the workspace"
+publish = false
+
+# A standalone workspace root: keeps this crate out of the rusolve workspace build (it targets
+# wasm32-unknown-unknown and is built only by tools/build_wasm_components.sh).
+[workspace]
+
+[lib]
+crate-type = ["cdylib"]
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true
+debug = false

@@ -1,0 +1,10 @@
+{
+  "id": "project_selection",
+  "title": "Select projects under a budget (a 0-1 program)",
+  "kind": "model",
+  "modes": [
+    "python",
+    "highs-mcp"
+  ],
+  "prompt": "A firm may fund any of six projects A to F. Cost and value (both in k euro) are: A 30/40, B 25/35, C 40/55, D 35/50, E 45/70, F 50/90. The total cost may not exceed 120. Project E can only be funded if A is funded. Project F needs both B and C. C and D are mutually exclusive. At least two projects must be funded. Maximise the total value.\nName the 0-1 variables `pA`, `pB`, `pC`, `pD`, `pE`, `pF`.\n\nReport values at the full precision the solver returns.\n\nEnd your final message with one line of the form\nANSWER: {\"status\": \"<solution status string>\", \"objective\": <number>, \"plan\": {\"<variable name>\": <value>, ...}}\nwhere `plan` lists every decision variable named above by exactly the name given (zeros may be left out), and `status` is \"Optimal\" when the solver proves optimality."
+}

@@ -1,0 +1,80 @@
+# CI for the checks that need no reference solver or benchmark data.
+#
+# Not here, on purpose: the parity check (tools/bench/identity.sh), which compares two rusolve
+# builds on a pool of MIPLIB instances. It needs the instance data, which is not in the
+# repository (benches/data/ is gitignored); contributors run it locally before a change that
+# could move the default search (docs/skills/contrib-identity-abtest/SKILL.md).
+#
+# The cli tests skip the sp150x300d tests: those need the gitignored MIPLIB instance
+# benches/data/miplib/sp150x300d.mps, absent on a runner. Needs no LLM: the evals themselves
+# (evals/run.py) are run by hand, never in CI.
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  rust:
+    name: fmt, clippy, tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+      - name: fmt
+        run: cargo fmt --all --check
+      - name: clippy
+        run: cargo clippy -p rusolve-ekk -p rusolve-cli -p rusolve-wasm --release -j4 --tests --benches -- -D warnings
+      - name: ekk tests
+        run: cargo test --release -p rusolve-ekk -j4 --lib
+      # sp150x300d tests need the gitignored MIPLIB instance (benches/data/miplib/).
+      - name: cli tests
+        run: cargo test --release -p rusolve-cli -j4 --no-fail-fast -- --skip sp150x300d
+
+  python:
+    name: rusolve-py tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: build the extension and run pytest
+        run: |
+          python -m venv .venv
+          . .venv/bin/activate
+          pip install maturin pytest numpy scipy jsonschema mypy
+          maturin develop --release -m crates/rusolve-py/Cargo.toml
+          # the CLI-dependent tests (test_basic, test_diagnostics, test_errors) need the binary
+          cargo build --release -p rusolve-cli -j4
+          mypy crates/rusolve-py/python/rusolve
+          pytest -q -rs crates/rusolve-py/tests
+
+  agent:
+    name: agent docs and graders
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: tools/agent_ci.sh
+        run: tools/agent_ci.sh

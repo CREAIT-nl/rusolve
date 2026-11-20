@@ -1,0 +1,136 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://rusolve.dev/schema/rusolve-ranging-1.schema.json",
+  "title": "rusolve.ranging/1",
+  "description": "What `rusolve ranging <model.mps> --format json` writes as the one JSON object on stdout. Written by crates/rusolve-cli/src/ranging.rs from the ported Highs::getRanging (HiGHS 1.16.0 HighsRanging.cpp getRangingData). Numbers: JSON has no inf/nan, so a non-finite value (an infinite bound, a ranging limit of +-inf) is null, as in rusolve.result/1. A ranging 'down'/'up' side has value (the limit of the cost or bound), objective (the objective at that limit) and in_var/out_var (the variable entering / leaving the basis there, null when none). For a MIP the report is on the LP with the integer columns fixed at the incumbent (basis_of = fixed_integer_lp): it says nothing about other integer assignments.",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "solver",
+    "input",
+    "basis_of",
+    "status",
+    "mip_status",
+    "objective",
+    "ranging_valid",
+    "columns",
+    "rows"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": { "const": "rusolve.ranging/1" },
+    "solver": {
+      "type": "object",
+      "required": ["name", "version", "engine"],
+      "additionalProperties": false,
+      "properties": {
+        "name": { "const": "rusolve" },
+        "version": { "type": "string" },
+        "engine": { "const": "highs-port" }
+      }
+    },
+    "input": {
+      "type": "object",
+      "required": ["path", "rows", "cols", "integer_cols"],
+      "additionalProperties": false,
+      "properties": {
+        "path": { "type": "string" },
+        "rows": { "type": "integer", "minimum": 0 },
+        "cols": { "type": "integer", "minimum": 0 },
+        "integer_cols": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "basis_of": {
+      "description": "'lp' for a pure LP; 'fixed_integer_lp' for a MIP (integers fixed at the incumbent, LP re-solved); 'mip' only when the MIP has no incumbent (ranging_valid is then false).",
+      "enum": ["lp", "fixed_integer_lp", "mip"]
+    },
+    "status": {
+      "description": "rusolve.result/1 status of the solve the ranging is read from (the LP, or the MIP when it has no incumbent).",
+      "type": "string"
+    },
+    "mip_status": {
+      "description": "rusolve.result/1 status of the MIP solve that produced the incumbent; null for an LP.",
+      "type": ["string", "null"]
+    },
+    "objective": { "type": ["number", "null"] },
+    "ranging_valid": {
+      "description": "false when the model was not solved to optimality: columns and rows are then empty.",
+      "type": "boolean"
+    },
+    "columns": { "type": "array", "items": { "$ref": "#/$defs/column" } },
+    "rows": { "type": "array", "items": { "$ref": "#/$defs/row" } }
+  },
+  "$defs": {
+    "var": {
+      "description": "A basis variable by name; null for none.",
+      "oneOf": [
+        { "type": "null" },
+        {
+          "type": "object",
+          "required": ["kind", "name"],
+          "additionalProperties": false,
+          "properties": {
+            "kind": { "enum": ["col", "row"] },
+            "name": { "type": "string" }
+          }
+        }
+      ]
+    },
+    "side": {
+      "type": "object",
+      "required": ["value", "objective", "in_var", "out_var"],
+      "additionalProperties": false,
+      "properties": {
+        "value": { "type": ["number", "null"] },
+        "objective": { "type": ["number", "null"] },
+        "in_var": { "$ref": "#/$defs/var" },
+        "out_var": { "$ref": "#/$defs/var" }
+      }
+    },
+    "ranging": {
+      "type": "object",
+      "required": ["down", "up"],
+      "additionalProperties": false,
+      "properties": {
+        "down": { "$ref": "#/$defs/side" },
+        "up": { "$ref": "#/$defs/side" }
+      }
+    },
+    "basis_status": { "enum": ["lower", "basic", "upper", "zero", "nonbasic"] },
+    "column": {
+      "type": "object",
+      "required": [
+        "name", "value", "reduced_cost", "basis_status", "cost", "lower", "upper",
+        "cost_ranging", "bound_ranging"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "name": { "type": "string" },
+        "value": { "type": ["number", "null"] },
+        "reduced_cost": { "type": ["number", "null"] },
+        "basis_status": { "$ref": "#/$defs/basis_status" },
+        "cost": { "type": ["number", "null"] },
+        "lower": { "type": ["number", "null"] },
+        "upper": { "type": ["number", "null"] },
+        "cost_ranging": { "$ref": "#/$defs/ranging" },
+        "bound_ranging": { "$ref": "#/$defs/ranging" }
+      }
+    },
+    "row": {
+      "type": "object",
+      "required": [
+        "name", "activity", "dual", "basis_status", "lower", "upper", "bound_ranging"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "name": { "type": "string" },
+        "activity": { "type": ["number", "null"] },
+        "dual": { "type": ["number", "null"] },
+        "basis_status": { "$ref": "#/$defs/basis_status" },
+        "lower": { "type": ["number", "null"] },
+        "upper": { "type": ["number", "null"] },
+        "bound_ranging": { "$ref": "#/$defs/ranging" }
+      }
+    }
+  }
+}

@@ -1,0 +1,21 @@
+[package]
+name = "rusolve-lp"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+rusolve-core = { workspace = true }
+
+[dev-dependencies]
+criterion = { workspace = true }
+rusolve-io = { workspace = true }
+
+[[bench]]
+name = "numerics"
+harness = false
+
+[[bench]]
+name = "ipm_chol"
+harness = false

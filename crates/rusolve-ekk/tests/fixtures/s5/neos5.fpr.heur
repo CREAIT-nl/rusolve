@@ -1,0 +1,32 @@
+[HeurSol] name=fpr dispatch=1 worker=0 effort_at=5728 obj=21 accepted=1
+[HeurSol] name=fpr dispatch=1 worker=0 effort_at=11456 obj=21 accepted=1
+[HeurSol] name=fpr dispatch=1 worker=0 effort_at=17184 obj=21 accepted=1
+[HeurSol] name=fpr dispatch=1 worker=0 effort_at=22912 obj=21 accepted=1
+[HeurSol] name=fpr dispatch=1 worker=0 effort_at=28640 obj=21 accepted=1
+[HeurSol] name=fpr dispatch=1 worker=0 effort_at=34368 obj=21 accepted=1
+[HeurSol] name=fpr dispatch=1 worker=0 effort_at=40096 obj=21 accepted=1
+[HeurSol] name=fpr dispatch=1 worker=0 effort_at=45824 obj=21 accepted=1
+[HeurSol] name=fpr dispatch=1 worker=0 effort_at=51552 obj=21 accepted=1
+[HeurSol] name=fpr dispatch=1 worker=0 effort_at=57280 obj=21 accepted=1
+[Sequential] heur=fpr effort=882112
+[HeurSol] name=fpr dispatch=41 worker=0 effort_at=5728 obj=21 accepted=1
+[HeurSol] name=fpr dispatch=41 worker=0 effort_at=11456 obj=21 accepted=1
+[HeurSol] name=fpr dispatch=41 worker=0 effort_at=17184 obj=21 accepted=1
+[HeurSol] name=fpr dispatch=41 worker=0 effort_at=22912 obj=21 accepted=1
+[HeurSol] name=fpr dispatch=41 worker=0 effort_at=28640 obj=21 accepted=1
+[HeurSol] name=fpr dispatch=41 worker=0 effort_at=34368 obj=21 accepted=1
+[HeurSol] name=fpr dispatch=41 worker=0 effort_at=40096 obj=21 accepted=1
+[HeurSol] name=fpr dispatch=41 worker=0 effort_at=45824 obj=21 accepted=1
+[HeurSol] name=fpr dispatch=41 worker=0 effort_at=51552 obj=21 accepted=1
+[Sequential] heur=fpr effort=698816
+[HeurSol] name=fpr dispatch=125 worker=0 effort_at=5728 obj=21 accepted=1
+[HeurSol] name=fpr dispatch=125 worker=0 effort_at=11456 obj=21 accepted=1
+[HeurSol] name=fpr dispatch=125 worker=0 effort_at=17184 obj=21 accepted=1
+[HeurSol] name=fpr dispatch=125 worker=0 effort_at=22912 obj=21 accepted=1
+[HeurSol] name=fpr dispatch=125 worker=0 effort_at=28640 obj=21 accepted=1
+[HeurSol] name=fpr dispatch=125 worker=0 effort_at=34368 obj=21 accepted=1
+[HeurSol] name=fpr dispatch=125 worker=0 effort_at=40096 obj=21 accepted=1
+[HeurSol] name=fpr dispatch=125 worker=0 effort_at=45824 obj=21 accepted=1
+[HeurSol] name=fpr dispatch=125 worker=0 effort_at=51552 obj=21 accepted=1
+[Sequential] heur=fpr effort=698816
+final obj=14.999999999970573 status=Optimal
