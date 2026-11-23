@@ -1,0 +1,6 @@
+{
+  "id": "add_cuts",
+  "title": "Add a cut family that tightens the root relaxation",
+  "kind": "extend",
+  "prompt": "{dir}/model.mps is a single-constraint 0-1 knapsack (minimisation) whose LP relaxation is weaker than its integer optimum. Using the rusolve tools, derive at most 10 valid inequalities (for example knapsack cover inequalities) that together close at least half of the gap between the LP relaxation optimum and the integer optimum. A cut is valid only if no integer-feasible point of the original model violates it; invalid cuts fail the task.\n\nGive each cut as {\"name\": \"<any name>\", \"lower\": <number or null>, \"upper\": <number or null>, \"coefs\": {\"<column>\": <coefficient>, ...}}. End your final message with one line of the form\nANSWER: {\"cuts\": [ ... ]}"
+}

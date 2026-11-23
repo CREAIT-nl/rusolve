@@ -1,0 +1,125 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://rusolve.dev/schema/rusolve-classify-1.schema.json",
+  "title": "rusolve.classify/1",
+  "description": "Output of `rusolve classify <model> --format json`. One object on stdout; logs go to stderr. `features_version` is rusolve_mip::classify::FEATURE_VERSION: it changes whenever the feature list, its order or a normalisation changes, so a stored feature vector must only be compared with vectors of the same version. All feature values are normalised to [0, 1] (documented per feature in `description`); a non-finite value is null. The `detail` object is the unchanged output of `classify --json` (counts and statistics before normalisation). `classify` without `--format json` keeps its text output.",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "features_version",
+    "solver",
+    "input",
+    "options",
+    "features",
+    "detail"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "rusolve.classify/1"
+    },
+    "class": {
+      "description": "The router class (lp, mip, convex_qp, nonconvex_qp, miqp, conic, nonconvex_qcqp, mi_conic, gc, gc_mip, gc_quadratic), the name the result envelope carries; null if the file cannot be read.",
+      "type": ["string", "null"]
+    },
+    "features_version": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "solver": {
+      "type": "object",
+      "required": [
+        "name",
+        "version",
+        "profile",
+        "engine"
+      ],
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "version": {
+          "type": "string"
+        },
+        "git": {
+          "type": "string"
+        },
+        "profile": {
+          "type": "string"
+        },
+        "engine": {
+          "type": "string"
+        }
+      }
+    },
+    "input": {
+      "type": "object",
+      "required": [
+        "path",
+        "sha256",
+        "rows",
+        "columns",
+        "nonzeros"
+      ],
+      "properties": {
+        "path": {
+          "type": "string"
+        },
+        "sha256": {
+          "type": "string"
+        },
+        "rows": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "columns": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "nonzeros": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "options": {
+      "type": "object",
+      "required": [
+        "miplib_strict"
+      ],
+      "properties": {
+        "miplib_strict": {
+          "type": "boolean"
+        }
+      }
+    },
+    "features": {
+      "description": "One entry per feature, in a fixed order.",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "name",
+          "value",
+          "description"
+        ],
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "value": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "description": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "detail": {
+      "type": "object"
+    }
+  }
+}

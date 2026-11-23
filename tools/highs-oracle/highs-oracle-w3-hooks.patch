@@ -1,0 +1,407 @@
+# rusolve highs-oracle W3 hooks (cuPDLP-C / HiPDLP trace, w3/cupdlp and w3/hipdlp fixtures).
+# Applied with patch -p1 AFTER highs-oracle-w1-hooks.patch; own stamp
+# target/highs-oracle/highs-src.w3.stamp. See README.md / FORMAT.md ("W3 records").
+--- a/highs/pdlp/cupdlp/cupdlp_proj.c
++++ b/highs/pdlp/cupdlp/cupdlp_proj.c
+@@ -12,6 +12,7 @@
+ #include "pdlp/cupdlp/cupdlp_step.h"
+ #include "pdlp/cupdlp/cupdlp_utils.h"
+ #include "pdlp/cupdlp/glbopts.h"
++#include "pdlp/HighsOracleW3Dump.h"  // rusolve oracle instrumentation
+ 
+ // primal projection: project x to [lower, upper]
+ void PDHG_Project_Bounds(CUPDLPwork *work, cupdlp_float *r) {
+@@ -143,6 +144,7 @@
+   iterates->iLastRestartIter = timers->nIter;
+ 
+   PDHG_Compute_Residuals(pdhg);
++  highsOracleW3PdlpRestart(pdhg, (int)restart_choice);  // rusolve oracle
+   // cupdlp_printf("Recomputed stepsize ratio: %e,  sqrt(ratio)=%e",
+   // stepsize->dBeta, sqrt(stepsize->dBeta));
+ }
+--- a/highs/pdlp/cupdlp/cupdlp_solver.c
++++ b/highs/pdlp/cupdlp/cupdlp_solver.c
+@@ -8,6 +8,9 @@
+ #include "pdlp/cupdlp/cupdlp_step.h"
+ #include "pdlp/cupdlp/cupdlp_utils.h"
+ #include "pdlp/cupdlp/glbopts.h"
++// rusolve oracle instrumentation; this file defines the shared dump state.
++#define HIGHS_ORACLE_W3_DUMP_IMPL
++#include "pdlp/HighsOracleW3Dump.h"
+ 
+ void PDHG_Compute_Primal_Feasibility(CUPDLPwork *work, cupdlp_float *primalResidual,
+                                     const cupdlp_float *ax, const cupdlp_float *x,
+@@ -976,6 +979,7 @@
+       PDHG_Compute_Average_Iterate(pdhg);
+       PDHG_Compute_Residuals(pdhg);
+       PDHG_Compute_Infeas_Residuals(pdhg);
++      highsOracleW3PdlpCheck(pdhg);  // rusolve oracle
+ 
+       if (bool_print) {
+ 	// With reduced printing, the header is only needed for the
+@@ -1088,6 +1092,7 @@
+       break;
+     }
+   }
++  highsOracleW3PdlpEnd(pdhg);  // rusolve oracle
+ 
+   // print at last
+   if (pdhg->settings->nLogLevel>0 && timers->nIter > 0) {
+--- a/highs/pdlp/hipdlp/pdhg.cc
++++ b/highs/pdlp/hipdlp/pdhg.cc
+@@ -28,6 +28,7 @@
+ #include "pdlp/cupdlp/cupdlp.h"  // For pdlpLogging
+ #include "pdlp_gpu_debug.hpp"
+ #include "restart.hpp"
++#include "pdlp/HighsOracleW3Dump.h"  // rusolve oracle instrumentation
+ 
+ #define PDHG_CHECK_INTERVAL 40
+ static constexpr double kDivergentMovement = 1e10;
+@@ -561,6 +562,16 @@
+   // =========================================================================
+   bool should_terminate =
+       runConvergenceCheck(final_iter_count_, x, y, termination_status);
++  highsOracleW3HipdlpCheck(  // rusolve oracle
++      final_iter_count_, halpern_iteration_, should_terminate,
++      stepsize_.primal_step, stepsize_.dual_step, stepsize_.beta, params_.omega,
++      params_.eta, primal_weight_, fpe_, initial_fpe_, results_.primal_obj,
++      results_.dual_obj, results_.duality_gap, results_.primal_feasibility,
++      results_.dual_feasibility, results_.relative_obj_gap,
++      x_current_.data(), (long long)x_current_.size(),
++      y_current_.data(), (long long)y_current_.size(),
++      x_next_.data(), (long long)x_next_.size(),
++      y_next_.data(), (long long)y_next_.size());
+ 
+   if (should_terminate) {
+     solveReturn(termination_status);
+@@ -647,6 +658,16 @@
+     TerminationStatus check_status;
+     should_terminate =
+         runConvergenceCheck(final_iter_count_, x, y, check_status);
++    highsOracleW3HipdlpCheck(  // rusolve oracle
++        final_iter_count_, halpern_iteration_, should_terminate,
++        stepsize_.primal_step, stepsize_.dual_step, stepsize_.beta, params_.omega,
++        params_.eta, primal_weight_, fpe_, initial_fpe_, results_.primal_obj,
++        results_.dual_obj, results_.duality_gap, results_.primal_feasibility,
++        results_.dual_feasibility, results_.relative_obj_gap,
++        x_current_.data(), (long long)x_current_.size(),
++        y_current_.data(), (long long)y_current_.size(),
++        x_next_.data(), (long long)x_next_.size(),
++        y_next_.data(), (long long)y_next_.size());
+     if (should_terminate) {
+       termination_status = check_status;
+       break;
+@@ -688,6 +709,14 @@
+ 
+       halpern_iteration_ = 0;
+       last_trial_fpe = std::numeric_limits<double>::infinity();
++      highsOracleW3HipdlpRestart(  // rusolve oracle
++          final_iter_count_, stepsize_.primal_step, stepsize_.dual_step,
++          stepsize_.beta, params_.omega, primal_weight_, best_primal_weight_,
++          primal_weight_error_sum_, primal_weight_last_error_,
++          x_current_.data(), (long long)x_current_.size(),
++          y_current_.data(), (long long)y_current_.size(),
++          x_next_.data(), (long long)x_next_.size(),
++          y_next_.data(), (long long)y_next_.size());
+     }
+   }
+ 
+@@ -1130,6 +1159,12 @@
+   cleanupGpu();
+ #endif
+   results_.term_code = term_code;
++  highsOracleW3HipdlpEnd(  // rusolve oracle
++      final_iter_count_, (int)term_code,
++      x_current_.data(), (long long)x_current_.size(),
++      y_current_.data(), (long long)y_current_.size(),
++      x_next_.data(), (long long)x_next_.size(),
++      y_next_.data(), (long long)y_next_.size());
+ #if PDLP_PROFILE
+   hipdlpTimerStop(kHipdlpClockSolve);
+ #endif
+--- /dev/null
++++ b/highs/pdlp/HighsOracleW3Dump.h
+@@ -0,0 +1,283 @@
++/* rusolve oracle instrumentation -- NOT part of upstream HiGHS.
++ *
++ * Added by tools/highs-oracle/highs-oracle-w3-hooks.patch (applied after
++ * highs-oracle-w1-hooks.patch, with its own stamp). When the environment
++ * variable HIGHS_ORACLE_PDLP_DUMP names a file, the patched cuPDLP-C and
++ * HiPDLP append one JSON line at each hook site:
++ *
++ *   pdlp_check     cupdlp_solver.c PDHG_Solve, after
++ *                  PDHG_Compute_Infeas_Residuals in the bool_checking block
++ *   pdlp_restart   cupdlp_proj.c PDHG_Restart_Iterate_GPU, last statement
++ *   pdlp_end       cupdlp_solver.c PDHG_Solve, right after the for loop
++ *   hipdlp_check   pdhg.cc PDLPSolver::solve, after each runConvergenceCheck
++ *   hipdlp_restart pdhg.cc PDLPSolver::solve, end of the if (do_restart) block
++ *   hipdlp_end     pdhg.cc PDLPSolver::solveReturn, after results_.term_code
++ *
++ * Records are described in tools/highs-oracle/FORMAT.md ("W3 records") and
++ * mirrored by crates/rusolve-ekk/src/pdlp/oracle_trace.rs. Doubles are the
++ * 16 hex digits of their bit pattern; vectors are FNV-1a 64 hashes of the
++ * little-endian bit patterns of v[0..n). The file is opened in append mode
++ * by the first record of the process (the oracle writes the w3_header line
++ * before the run), so the hook lines land in place; every record is flushed.
++ * Without the variable nothing is written. The functions only read solver
++ * state.
++ *
++ * The cupdlp_*.c files compile as C, so this header is C (and C++)
++ * compatible. The file and the call counter are shared by every
++ * translation unit: they are defined once, in cupdlp_solver.c, which
++ * defines HIGHS_ORACLE_W3_DUMP_IMPL before including this header.
++ */
++#ifndef PDLP_HIGHSORACLEW3DUMP_H_
++#define PDLP_HIGHSORACLEW3DUMP_H_
++
++#include <inttypes.h>
++#include <stdint.h>
++#include <stdio.h>
++#include <stdlib.h>
++#include <string.h>
++
++#ifdef __cplusplus
++extern "C" {
++#endif
++/* The dump file (opened on first use), or NULL when HIGHS_ORACLE_PDLP_DUMP
++ * is unset or empty. */
++FILE* highsOracleW3File(void);
++/* The 0-based counter over the hook lines of the process. */
++long long* highsOracleW3Call(void);
++/* Closes the dump file; the next record reopens it (append). */
++void highsOracleW3Close(void);
++#ifdef __cplusplus
++}
++#endif
++
++#ifdef HIGHS_ORACLE_W3_DUMP_IMPL
++static FILE* highs_oracle_w3_file = NULL;
++static int highs_oracle_w3_opened = 0;
++static long long highs_oracle_w3_call = 0;
++
++FILE* highsOracleW3File(void) {
++  if (!highs_oracle_w3_opened) {
++    const char* path = getenv("HIGHS_ORACLE_PDLP_DUMP");
++    highs_oracle_w3_opened = 1;
++    if (path != NULL && path[0] != '\0') highs_oracle_w3_file = fopen(path, "ab");
++  }
++  return highs_oracle_w3_file;
++}
++
++long long* highsOracleW3Call(void) { return &highs_oracle_w3_call; }
++
++void highsOracleW3Close(void) {
++  if (highs_oracle_w3_file != NULL) fclose(highs_oracle_w3_file);
++  highs_oracle_w3_file = NULL;
++  highs_oracle_w3_opened = 0;
++}
++#endif
++
++static inline void highsOracleW3F(FILE* f, const char* key, double v) {
++  uint64_t bits;
++  memcpy(&bits, &v, 8);
++  fprintf(f, ",\"%s\":\"%016" PRIx64 "\"", key, bits);
++}
++
++static inline void highsOracleW3I(FILE* f, const char* key, long long v) {
++  fprintf(f, ",\"%s\":%lld", key, v);
++}
++
++/* FNV-1a 64 over the little-endian bit patterns of v[0..n). */
++static inline void highsOracleW3H(FILE* f, const char* key, const double* v,
++                                  long long n) {
++  uint64_t h = 0xcbf29ce484222325ULL;
++  long long i;
++  int b;
++  for (i = 0; i < n; ++i) {
++    uint64_t bits;
++    memcpy(&bits, &v[i], 8);
++    for (b = 0; b < 8; ++b) {
++      h ^= (bits >> (8 * b)) & 0xff;
++      h *= 0x100000001b3ULL;
++    }
++  }
++  fprintf(f, ",\"%s\":\"%016" PRIx64 "\"", key, h);
++}
++
++/* Starts record t ({"t":"<t>","call":N), or returns NULL when disabled. */
++static inline FILE* highsOracleW3Begin(const char* t) {
++  FILE* f = highsOracleW3File();
++  long long* call;
++  if (f == NULL) return NULL;
++  call = highsOracleW3Call();
++  fprintf(f, "{\"t\":\"%s\",\"call\":%lld", t, *call);
++  ++*call;
++  return f;
++}
++
++static inline void highsOracleW3End(FILE* f) {
++  fputs("}\n", f);
++  fflush(f);
++}
++
++/* ------------------------------------------------------------- cuPDLP-C */
++#ifdef CUPDLP_H_GUARD
++static inline void highsOracleW3PdlpCheck(const CUPDLPwork* w) {
++  FILE* f = highsOracleW3Begin("pdlp_check");
++  const CUPDLPiterates* it;
++  const CUPDLPstepsize* st;
++  const CUPDLPresobj* r;
++  int k;
++  if (f == NULL) return;
++  it = w->iterates;
++  st = w->stepsize;
++  r = w->resobj;
++  k = w->timers->nIter % 2;
++  highsOracleW3I(f, "iter", w->timers->nIter);
++  highsOracleW3F(f, "p_step", st->dPrimalStep);
++  highsOracleW3F(f, "d_step", st->dDualStep);
++  highsOracleW3F(f, "beta", st->dBeta);
++  highsOracleW3I(f, "ss_iter", st->nStepSizeIter);
++  highsOracleW3I(f, "last_restart", it->iLastRestartIter);
++  highsOracleW3F(f, "pobj", r->dPrimalObj);
++  highsOracleW3F(f, "dobj", r->dDualObj);
++  highsOracleW3F(f, "gap", r->dDualityGap);
++  highsOracleW3F(f, "compl", r->dComplementarity);
++  highsOracleW3F(f, "pfeas", r->dPrimalFeas);
++  highsOracleW3F(f, "dfeas", r->dDualFeas);
++  highsOracleW3F(f, "relgap", r->dRelObjGap);
++  highsOracleW3F(f, "pobj_a", r->dPrimalObjAverage);
++  highsOracleW3F(f, "dobj_a", r->dDualObjAverage);
++  highsOracleW3F(f, "gap_a", r->dDualityGapAverage);
++  highsOracleW3F(f, "compl_a", r->dComplementarityAverage);
++  highsOracleW3F(f, "pfeas_a", r->dPrimalFeasAverage);
++  highsOracleW3F(f, "dfeas_a", r->dDualFeasAverage);
++  highsOracleW3F(f, "relgap_a", r->dRelObjGapAverage);
++  highsOracleW3F(f, "pinf_obj", r->dPrimalInfeasObj);
++  highsOracleW3F(f, "dinf_obj", r->dDualInfeasObj);
++  highsOracleW3F(f, "pinf_res", r->dPrimalInfeasRes);
++  highsOracleW3F(f, "dinf_res", r->dDualInfeasRes);
++  highsOracleW3H(f, "h_x", it->x[k]->data, w->problem->nCols);
++  highsOracleW3H(f, "h_y", it->y[k]->data, w->problem->nRows);
++  highsOracleW3H(f, "h_xa", it->xAverage->data, w->problem->nCols);
++  highsOracleW3H(f, "h_ya", it->yAverage->data, w->problem->nRows);
++  highsOracleW3End(f);
++}
++
++/* choice: PDHG_RESTART_TO_CURRENT (1) or PDHG_RESTART_TO_AVERAGE (2). */
++static inline void highsOracleW3PdlpRestart(const CUPDLPwork* w, int choice) {
++  FILE* f = highsOracleW3Begin("pdlp_restart");
++  const CUPDLPiterates* it;
++  const CUPDLPstepsize* st;
++  const CUPDLPresobj* r;
++  int k;
++  if (f == NULL) return;
++  it = w->iterates;
++  st = w->stepsize;
++  r = w->resobj;
++  k = w->timers->nIter % 2;
++  highsOracleW3I(f, "iter", w->timers->nIter);
++  highsOracleW3I(f, "choice", choice);
++  highsOracleW3F(f, "p_step", st->dPrimalStep);
++  highsOracleW3F(f, "d_step", st->dDualStep);
++  highsOracleW3F(f, "beta", st->dBeta);
++  highsOracleW3F(f, "pfeas_lr", r->dPrimalFeasLastRestart);
++  highsOracleW3F(f, "dfeas_lr", r->dDualFeasLastRestart);
++  highsOracleW3F(f, "gap_lr", r->dDualityGapLastRestart);
++  highsOracleW3H(f, "h_x", it->x[k]->data, w->problem->nCols);
++  highsOracleW3H(f, "h_y", it->y[k]->data, w->problem->nRows);
++  highsOracleW3End(f);
++}
++
++static inline void highsOracleW3PdlpEnd(const CUPDLPwork* w) {
++  FILE* f = highsOracleW3Begin("pdlp_end");
++  const CUPDLPiterates* it;
++  int k;
++  if (f == NULL) return;
++  it = w->iterates;
++  k = w->timers->nIter % 2;
++  highsOracleW3I(f, "iter", w->timers->nIter);
++  highsOracleW3I(f, "term_code", (long long)w->resobj->termCode);
++  highsOracleW3I(f, "term_iterate", (long long)w->resobj->termIterate);
++  highsOracleW3H(f, "h_x", it->x[k]->data, w->problem->nCols);
++  highsOracleW3H(f, "h_y", it->y[k]->data, w->problem->nRows);
++  highsOracleW3H(f, "h_xa", it->xAverage->data, w->problem->nCols);
++  highsOracleW3H(f, "h_ya", it->yAverage->data, w->problem->nRows);
++  highsOracleW3End(f);
++}
++#endif /* CUPDLP_H_GUARD */
++
++/* --------------------------------------------------------------- HiPDLP */
++/* The HiPDLP hooks sit inside PDLPSolver member functions, which pass the
++ * member values explicitly (x = x_current_, y = y_current_, xn = x_next_,
++ * yn = y_next_, each over its full length). */
++static inline void highsOracleW3HipdlpIterates(FILE* f, const double* x, long long nx,
++                                               const double* y, long long ny,
++                                               const double* xn, long long nxn,
++                                               const double* yn, long long nyn) {
++  highsOracleW3H(f, "h_x", x, nx);
++  highsOracleW3H(f, "h_y", y, ny);
++  highsOracleW3H(f, "h_xn", xn, nxn);
++  highsOracleW3H(f, "h_yn", yn, nyn);
++}
++
++static inline void highsOracleW3HipdlpCheck(
++    long long iter, long long halpern, int stop, double p_step, double d_step,
++    double beta, double omega, double eta, double pw, double fpe, double ifpe,
++    double pobj, double dobj, double gap, double pfeas, double dfeas,
++    double relgap, const double* x, long long nx, const double* y, long long ny,
++    const double* xn, long long nxn, const double* yn, long long nyn) {
++  FILE* f = highsOracleW3Begin("hipdlp_check");
++  if (f == NULL) return;
++  highsOracleW3I(f, "iter", iter);
++  highsOracleW3I(f, "halpern", halpern);
++  highsOracleW3I(f, "stop", stop ? 1 : 0);
++  highsOracleW3F(f, "p_step", p_step);
++  highsOracleW3F(f, "d_step", d_step);
++  highsOracleW3F(f, "beta", beta);
++  highsOracleW3F(f, "omega", omega);
++  highsOracleW3F(f, "eta", eta);
++  highsOracleW3F(f, "pw", pw);
++  highsOracleW3F(f, "fpe", fpe);
++  highsOracleW3F(f, "ifpe", ifpe);
++  highsOracleW3F(f, "pobj", pobj);
++  highsOracleW3F(f, "dobj", dobj);
++  highsOracleW3F(f, "gap", gap);
++  highsOracleW3F(f, "pfeas", pfeas);
++  highsOracleW3F(f, "dfeas", dfeas);
++  highsOracleW3F(f, "relgap", relgap);
++  highsOracleW3HipdlpIterates(f, x, nx, y, ny, xn, nxn, yn, nyn);
++  highsOracleW3End(f);
++}
++
++static inline void highsOracleW3HipdlpRestart(
++    long long iter, double p_step, double d_step, double beta, double omega,
++    double pw, double best_pw, double pw_err_sum, double pw_last_err,
++    const double* x, long long nx, const double* y, long long ny,
++    const double* xn, long long nxn, const double* yn, long long nyn) {
++  FILE* f = highsOracleW3Begin("hipdlp_restart");
++  if (f == NULL) return;
++  highsOracleW3I(f, "iter", iter);
++  highsOracleW3F(f, "p_step", p_step);
++  highsOracleW3F(f, "d_step", d_step);
++  highsOracleW3F(f, "beta", beta);
++  highsOracleW3F(f, "omega", omega);
++  highsOracleW3F(f, "pw", pw);
++  highsOracleW3F(f, "best_pw", best_pw);
++  highsOracleW3F(f, "pw_err_sum", pw_err_sum);
++  highsOracleW3F(f, "pw_last_err", pw_last_err);
++  highsOracleW3HipdlpIterates(f, x, nx, y, ny, xn, nxn, yn, nyn);
++  highsOracleW3End(f);
++}
++
++/* term_code: TerminationStatus as int (NOTSET 0 ... ERROR 6). */
++static inline void highsOracleW3HipdlpEnd(long long iter, int term_code,
++                                          const double* x, long long nx,
++                                          const double* y, long long ny,
++                                          const double* xn, long long nxn,
++                                          const double* yn, long long nyn) {
++  FILE* f = highsOracleW3Begin("hipdlp_end");
++  if (f == NULL) return;
++  highsOracleW3I(f, "iter", iter);
++  highsOracleW3I(f, "term_code", term_code);
++  highsOracleW3HipdlpIterates(f, x, nx, y, ny, xn, nxn, yn, nyn);
++  highsOracleW3End(f);
++}
++
++#endif /* PDLP_HIGHSORACLEW3DUMP_H_ */

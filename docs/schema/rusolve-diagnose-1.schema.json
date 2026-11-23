@@ -1,0 +1,113 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://rusolve.dev/schema/rusolve-diagnose-1.schema.json",
+  "title": "rusolve.diagnose/1",
+  "description": "The object `rusolve diagnose <model.mps> --format json` writes on stdout. Written by crates/rusolve-cli/src/diagnose.rs. The verdict is a heuristic judgement, not a proof: `confidence` is a score ratio, not a probability. `verdict` is `none` when the model is not infeasible. Names are the model's own MPS names.",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "input",
+    "kind",
+    "status",
+    "verdict",
+    "confidence",
+    "summary",
+    "naming_informative",
+    "scores",
+    "families",
+    "evidence",
+    "suggested_fix",
+    "notes"
+  ],
+  "properties": {
+    "schema_version": { "const": "rusolve.diagnose/1" },
+    "input": {
+      "type": "object",
+      "required": ["path", "rows", "cols", "integer_cols"],
+      "properties": {
+        "path": { "type": "string" },
+        "rows": { "type": "integer" },
+        "cols": { "type": "integer" },
+        "integer_cols": { "type": "integer" }
+      }
+    },
+    "kind": { "enum": ["lp", "relaxation"] },
+    "status": { "type": "string" },
+    "verdict": { "enum": ["formulation", "data", "unclear", "none"] },
+    "confidence": { "type": ["number", "null"], "minimum": 0, "maximum": 1 },
+    "summary": { "type": "string" },
+    "naming_informative": {
+      "description": "True when some name family has 3+ members and a stem of 2+ characters; null when the model is not infeasible.",
+      "type": ["boolean", "null"]
+    },
+    "scores": {
+      "type": "object",
+      "required": ["data", "formulation"],
+      "properties": {
+        "data": { "type": "number" },
+        "formulation": { "type": "number" }
+      }
+    },
+    "families": {
+      "description": "Name families touched by the IIS or by the minimum-count relaxation.",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["kind", "stem", "size", "in_iis", "in_relaxation", "iis_coverage", "outlier_cells"],
+        "properties": {
+          "kind": { "enum": ["row", "column"] },
+          "stem": { "type": "string" },
+          "size": { "type": "integer" },
+          "in_iis": { "type": "integer" },
+          "in_relaxation": { "type": "integer" },
+          "iis_coverage": { "type": "number" },
+          "coefficient_consistency": { "type": ["number", "null"] },
+          "senses": { "type": "object" },
+          "outlier_cells": { "type": "integer" }
+        }
+      }
+    },
+    "evidence": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["signal", "supports", "weight", "detail"],
+        "properties": {
+          "signal": { "type": "string" },
+          "supports": { "enum": ["data", "formulation", "neutral"] },
+          "weight": { "type": "number" },
+          "detail": { "type": "string" }
+        }
+      }
+    },
+    "suggested_fix": {
+      "description": "null when the verdict is unclear or none. `cells` (data) are the bounds to inspect; `families` (formulation) the conflicting families.",
+      "oneOf": [
+        { "type": "null" },
+        {
+          "type": "object",
+          "required": ["type", "text", "cells", "families"],
+          "properties": {
+            "type": { "enum": ["data", "formulation"] },
+            "text": { "type": "string" },
+            "cells": { "type": "array", "items": { "type": "object" } },
+            "families": { "type": "array", "items": { "type": "string" } }
+          }
+        }
+      ]
+    },
+    "relaxation": {
+      "description": "The minimum-count relaxation (feasrelax --mode min-count); null when it could not be computed.",
+      "type": ["array", "null"],
+      "items": { "type": "object" }
+    },
+    "farkas": {
+      "type": "object",
+      "properties": {
+        "num_rows": { "type": "integer" },
+        "effective_rows": { "type": ["number", "null"] }
+      }
+    },
+    "notes": { "type": "array", "items": { "type": "string" } }
+  }
+}

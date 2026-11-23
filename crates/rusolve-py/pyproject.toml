@@ -1,0 +1,38 @@
+[build-system]
+requires = ["maturin>=1.5,<2"]
+build-backend = "maturin"
+
+[project]
+name = "rusolve"
+version = "0.1.0"
+description = "Fast LP/MIP solver in Rust: a simple Python model API (rusolve.Model), plus SciPy- and highspy-compatible layers"
+requires-python = ">=3.11"
+readme = "README.md"
+license = "BUSL-1.1"
+authors = [{ name = "The rusolve contributors" }]
+keywords = ["optimization", "linear-programming", "mixed-integer-programming", "solver", "highs"]
+classifiers = [
+  "Programming Language :: Rust",
+  "Programming Language :: Python :: 3",
+  "Intended Audience :: Science/Research",
+  "Topic :: Scientific/Engineering :: Mathematics",
+  "Development Status :: 3 - Alpha",
+]
+
+[project.urls]
+Repository = "https://github.com/CREAIT-nl/rusolve"
+Documentation = "https://github.com/CREAIT-nl/rusolve/tree/main/docs"
+Issues = "https://github.com/CREAIT-nl/rusolve/issues"
+
+# `rusolve` runs the CLI bundled in the wheel (python/rusolve/__main__.py), so
+# `uvx --from <wheel> rusolve mcp` works. The `rusolve-cli` binary name is unchanged
+# (cargo install, release archives).
+[project.scripts]
+rusolve = "rusolve.__main__:main"
+
+[tool.maturin]
+module-name = "rusolve._rusolve"
+python-source = "python"
+# The CLI binary is copied into python/rusolve/_bin/ by tools/build_wheel.sh before the build;
+# `include` makes maturin pack it even though it is gitignored (maturin docs: Metadata > include).
+include = [{ path = "python/rusolve/_bin/*", format = "wheel" }]

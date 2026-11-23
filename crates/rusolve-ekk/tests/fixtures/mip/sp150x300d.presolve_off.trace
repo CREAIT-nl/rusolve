@@ -1,0 +1,58 @@
+log Coefficient ranges:
+log   Matrix  [1e+00, 3e+03]
+log   Cost    [1e+00, 1e+00]
+log   Bound   [1e+00, 3e+03]
+log   RHS     [1e+00, 2e+03]
+log Presolve is switched off
+cb nodes=0 lpit=0 db=-inf pb=inf
+log Objective function is integral with scale 1
+log         Nodes      |    B&B Tree     |            Objective Bounds              |  Dynamic Constraints |       Work      
+log Src  Proc. InQueue |  Leaves   Expl. | BestBound       BestSol              Gap |   Cuts   InLp Confl. | LpIters     Time
+sol nodes=0 lpit=0 obj=71
+cb nodes=0 lpit=28 db=4.8911118399475235 pb=71
+sol nodes=0 lpit=28 obj=70
+cb nodes=0 lpit=100 db=33.899311249590028 pb=70
+cb nodes=0 lpit=137 db=40.884985916161781 pb=70
+cb nodes=0 lpit=172 db=44.324273720513311 pb=70
+cb nodes=0 lpit=218 db=56.08541094550074 pb=70
+cb nodes=0 lpit=230 db=58.071498852082648 pb=70
+cb nodes=0 lpit=239 db=59.121559198467359 pb=70
+cb nodes=0 lpit=244 db=59.122803326420538 pb=70
+cb nodes=0 lpit=250 db=59.489883410287888 pb=70
+cb nodes=0 lpit=257 db=59.490475383364625 pb=70
+cb nodes=0 lpit=292 db=60.989733575961999 pb=70
+cb nodes=0 lpit=318 db=60.991632760352651 pb=70
+cb nodes=0 lpit=334 db=63.018384611825269 pb=70
+cb nodes=0 lpit=357 db=63.038813788723978 pb=70
+cb nodes=0 lpit=376 db=63.684812526225464 pb=70
+cb nodes=0 lpit=386 db=63.97708343454331 pb=70
+cb nodes=0 lpit=396 db=64.605733975911491 pb=70
+cb nodes=0 lpit=420 db=65.177945671120284 pb=70
+cb nodes=0 lpit=427 db=65.868651809807204 pb=70
+cb nodes=0 lpit=433 db=65.873643411733994 pb=70
+cb nodes=0 lpit=454 db=65.995593539900071 pb=70
+cb nodes=0 lpit=463 db=66.083438246973017 pb=70
+cb nodes=0 lpit=477 db=66.618116721096442 pb=70
+cb nodes=0 lpit=485 db=66.624412797364201 pb=70
+cb nodes=0 lpit=507 db=67.10576698275176 pb=70
+cb nodes=0 lpit=513 db=67.106670721773014 pb=70
+cb nodes=0 lpit=519 db=67.137175531771291 pb=70
+cb nodes=0 lpit=531 db=67.138740042040183 pb=70
+cb nodes=0 lpit=547 db=67.156370550963601 pb=70
+cb nodes=0 lpit=566 db=67.167143428513782 pb=70
+cb nodes=0 lpit=583 db=67.167680275941393 pb=70
+sol nodes=0 lpit=583 obj=69
+cb nodes=0 lpit=981 db=67.167680275941393 pb=69
+cb nodes=0 lpit=1022 db=67.699168357953639 pb=69
+log Symmetry detection completed in <t>s
+cb nodes=0 lpit=1053 db=67.699168357953653 pb=69
+cb nodes=1 lpit=1126 db=69 pb=69
+log Solving report
+log   Status            Optimal
+log   Primal bound      69
+log   Dual bound        69
+log   Gap               0% (tolerance: 0.01%)
+log   Solution status   feasible
+log   Nodes             1
+log   LP iterations     1126
+final status=Optimal obj=69 bound=69 nodes=1 lp_iters=1126

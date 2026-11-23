@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://rusolve.dev/schema/rusolve-profile-diff-1.schema.json",
+  "title": "rusolve.profile-diff/1",
+  "description": "Output of `rusolve profile diff <a> <b> --format json`: every registry option whose effective value differs between a and b (each a profile file, `default` or `recommended`), in registry order.",
+  "type": "object",
+  "required": ["schema_version", "a", "b", "identical", "differences"],
+  "properties": {
+    "schema_version": { "const": "rusolve.profile-diff/1" },
+    "a": { "type": "string" },
+    "b": { "type": "string" },
+    "identical": { "type": "boolean" },
+    "differences": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name", "a", "b", "affects", "source"],
+        "properties": {
+          "name": { "type": "string" },
+          "a": {},
+          "b": {},
+          "affects": { "type": "string" },
+          "source": { "type": "string" }
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,145 @@
+# Release builds.
+# Tags, or a manual run (workflow_dispatch) that builds and smoke-tests without a tag. Builds abi3 wheels (Python >= 3.11) that bundle the CLI, plus CLI archives, for
+# macOS (arm64, x86_64), manylinux (x86_64, aarch64) and Windows (x86_64), smoke-tests each
+# wheel (pip install, `rusolve --help`, MCP initialize), and stops. The two publish jobs sit
+# behind GitHub Environments that must be configured with required reviewers (manual approval)
+# AND behind a repository variable that is unset by default, so a tag push publishes nothing.
+# Wheel mechanism: tools/build_wheel.sh puts the CLI in python/rusolve/_bin/ and runs maturin
+# (https://www.maturin.rs/); manylinux builds run in maturin-action's container
+# (https://github.com/PyO3/maturin-action); PyPI upload uses trusted publishing
+# (https://docs.pypi.org/trusted-publishers/), no token stored.
+name: release
+
+on:
+  push:
+    tags: ["v[0-9]+.[0-9]+.[0-9]+*"]
+  # build and smoke-test the wheels without tagging; the publish jobs stay behind their
+  # variables and environments either way
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+  PROFILE: dist
+
+jobs:
+  wheels-native:
+    name: wheel + CLI (${{ matrix.name }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { name: macos-arm64, os: macos-15, exe: rusolve-cli }
+          - { name: macos-x86_64, os: macos-15-intel, exe: rusolve-cli }
+          - { name: windows-x86_64, os: windows-2022, exe: rusolve-cli.exe }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python -m pip install "maturin>=1.5,<2"
+      - name: Build CLI and wheel
+        shell: bash
+        run: tools/build_wheel.sh dist-wheels
+      - name: Smoke test the wheel in a clean venv
+        shell: bash
+        run: python tools/smoke_wheel.py dist-wheels
+      - name: Archive the CLI
+        shell: bash
+        run: |
+          mkdir -p dist-cli
+          if [ "${{ runner.os }}" = "Windows" ]; then
+            7z a "dist-cli/rusolve-cli-${{ matrix.name }}.zip" "./target/dist/${{ matrix.exe }}"
+          else
+            tar -C target/dist -czf "dist-cli/rusolve-cli-${{ matrix.name }}.tar.gz" "${{ matrix.exe }}"
+          fi
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist-${{ matrix.name }}
+          path: |
+            dist-wheels/*.whl
+            dist-cli/*
+
+  wheels-manylinux:
+    name: wheel + CLI (manylinux ${{ matrix.arch }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { arch: x86_64, os: ubuntu-24.04 }
+          - { arch: aarch64, os: ubuntu-24.04-arm }
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build wheel (CLI is built and bundled inside the manylinux container)
+        uses: PyO3/maturin-action@v1
+        with:
+          command: build
+          manylinux: "2_28"
+          args: --profile dist -m crates/rusolve-py/Cargo.toml -o dist-wheels
+          before-script-linux: |
+            cargo build --profile dist -p rusolve-cli
+            mkdir -p crates/rusolve-py/python/rusolve/_bin
+            cp target/dist/rusolve-cli crates/rusolve-py/python/rusolve/_bin/
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Smoke test the wheel in a clean venv
+        run: python tools/smoke_wheel.py dist-wheels
+      - name: Archive the CLI
+        run: |
+          mkdir -p dist-cli
+          tar -C target/dist -czf "dist-cli/rusolve-cli-linux-${{ matrix.arch }}.tar.gz" rusolve-cli
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist-linux-${{ matrix.arch }}
+          path: |
+            dist-wheels/*.whl
+            dist-cli/*
+
+  # Manual approval: configure Settings > Environments > "pypi" with required reviewers.
+  # Off by default: also needs the repository variable PUBLISH_TO_PYPI = true.
+  publish-pypi:
+    needs: [wheels-native, wheels-manylinux]
+    if: ${{ vars.PUBLISH_TO_PYPI == 'true' && startsWith(github.ref, 'refs/tags/') }}
+    runs-on: ubuntu-24.04
+    environment:
+      name: pypi
+      url: https://pypi.org/p/rusolve
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: dist-*
+          merge-multiple: true
+          path: artifacts
+      - run: mkdir dist && cp artifacts/*.whl dist/
+      - uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: dist
+
+  # Manual approval: configure Settings > Environments > "release" with required reviewers.
+  # Off by default: also needs the repository variable PUBLISH_GH_RELEASE = true.
+  github-release:
+    needs: [wheels-native, wheels-manylinux]
+    if: ${{ vars.PUBLISH_GH_RELEASE == 'true' && startsWith(github.ref, 'refs/tags/') }}
+    runs-on: ubuntu-24.04
+    environment:
+      name: release
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: dist-*
+          merge-multiple: true
+          path: artifacts
+      - name: Create the GitHub release as a draft
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "${{ github.ref_name }}" artifacts/* --repo "${{ github.repository }}" --draft --generate-notes

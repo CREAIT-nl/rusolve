@@ -1,0 +1,6 @@
+{
+  "id": "solve_report",
+  "title": "Solve a MIP and report the result",
+  "kind": "solve",
+  "prompt": "The file {dir}/model.mps is a small 0-1 knapsack-style MIP (minimisation). Solve it to proven optimality with the rusolve solver and report the final status, the objective value, and the names of the columns that equal 1 in the solution you found.\n\nEnd your final message with one line of the form\nANSWER: {\"status\": \"<solver status string>\", \"objective\": <number>, \"selected\": [\"<column name>\", ...]}"
+}

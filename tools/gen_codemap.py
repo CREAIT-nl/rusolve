@@ -1,0 +1,261 @@
+#!/usr/bin/env python3
+"""Generates docs/agent/codemap.md: where HiGHS code lives in the Rust port.
+
+    python3 tools/gen_codemap.py                   # rewrite docs/agent/codemap.md
+    python3 tools/gen_codemap.py --check           # exit 1 if codemap.md is stale or an AGENTS.md is broken
+    python3 tools/gen_codemap.py --check-agents F  # check only the AGENTS.md file(s) F (used by the negative test)
+
+Sources (pure text scan, no build needed):
+  * every `//! HiGHS source: <file>` header in crates/**/*.rs -> HiGHS file -> Rust file -> key pub items
+  * every field of `HighsOptions` (crates/rusolve-ekk/src/lp_data/highs_options.rs) -> the Rust files
+    that read it as `<expr>.<option>` outside the option tables themselves
+Output is deterministic: sorted, no timestamps, no absolute paths.
+
+--check also verifies the AGENTS.md files: every crate and every rusolve-ekk subsystem directory has one,
+and every backticked repo path in it (ends in .rs .md .py .sh .toml .tsv .jsonl, or ends in `/`) exists.
+"""
+import os
+import re
+import sys
+
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+OUT = os.path.join(ROOT, "docs", "agent", "codemap.md")
+CRATES = os.path.join(ROOT, "crates")
+EKK_SRC = os.path.join(CRATES, "rusolve-ekk", "src")
+OPTIONS_RS = os.path.join(EKK_SRC, "lp_data", "highs_options.rs")
+OPTION_TABLES = {"highs_options.rs", "highs_option_records.rs"}
+SUBSYSTEMS = ["simplex", "presolve", "mip", "ipm", "pdlp", "qpsolver", "lp_data", "model", "io", "parallel", "util"]
+
+HDR = re.compile(r"^//! HiGHS source(?: \([^)]*\))?:\s*(.*)$")
+HFILE = re.compile(r"((?:[A-Za-z_0-9]+/)*)([A-Za-z_0-9]+\.(?:h|hpp|cpp|cc|c))\b")
+PUB = re.compile(r"^pub (?:unsafe )?(struct|enum|trait|fn|const|static|type) (\w+)")
+
+
+def rust_files():
+    for base, dirs, files in os.walk(CRATES):
+        dirs[:] = sorted(d for d in dirs if d not in ("target", "node_modules", ".venv"))
+        for f in sorted(files):
+            if f.endswith(".rs"):
+                yield os.path.join(base, f)
+
+
+def rel(p):
+    return os.path.relpath(p, ROOT)
+
+
+def header_block(lines):
+    """The text of the first `//! HiGHS source:` paragraph, or None."""
+    for i, ln in enumerate(lines[:40]):
+        m = HDR.match(ln)
+        if m:
+            txt = [m.group(1)]
+            for nxt in lines[i + 1:i + 12]:
+                if not nxt.startswith("//!") or not nxt[3:].strip():
+                    break
+                txt.append(nxt[3:].strip())
+            return " ".join(txt)
+    return None
+
+
+def key_items(lines):
+    items = []
+    for ln in lines:
+        m = PUB.match(ln)
+        if m and m.group(2) not in ("new", "default"):
+            items.append((m.group(1), m.group(2)))
+    order = {"struct": 0, "enum": 1, "trait": 2, "fn": 3, "type": 4, "const": 5, "static": 6}
+    items.sort(key=lambda t: order[t[0]])  # stable: source order inside a kind
+    seen, out = set(), []
+    for _, n in items:
+        if n not in seen:
+            seen.add(n)
+            out.append(n)
+    return out
+
+
+def scan():
+    """rows: (highs_file, rust_file, items) ; also the number of Rust files with a header."""
+    rows, headered, texts = [], 0, {}
+    for p in rust_files():
+        text = open(p, encoding="utf-8", errors="replace").read()
+        texts[p] = text
+        lines = text.split("\n")
+        blk = header_block(lines)
+        if blk is None:
+            continue
+        headered += 1
+        items = key_items(lines)
+        shown = ", ".join(f"`{n}`" for n in items[:5]) + (f" (+{len(items) - 5})" if len(items) > 5 else "")
+        found, prefix = [], ""
+        for m in HFILE.finditer(blk):
+            if m.group(1):
+                prefix = m.group(1)
+            found.append((m.group(1) or prefix) + m.group(2))
+        if not found:
+            found = [(blk if blk.startswith("(") else blk.split("(")[0]).strip().rstrip(",;:")]
+        for h in sorted(set(found)):
+            rows.append((h, rel(p), shown))
+    rows.sort()
+    return rows, headered, texts
+
+
+def options():
+    names, on = [], False
+    for ln in open(OPTIONS_RS):
+        if ln.startswith("pub struct HighsOptions"):
+            on = True
+            continue
+        if on:
+            if ln.startswith("}"):
+                break
+            m = re.match(r"\s+pub (\w+):", ln)
+            if m:
+                names.append(m.group(1))
+    return names
+
+
+def option_readers(names, texts):
+    want = set(names)
+    users = {n: set() for n in names}
+    tok = re.compile(r"\.(\w+)\b")
+    for p, text in texts.items():
+        if os.path.basename(p) in OPTION_TABLES or "/tests/" in p or "/benches/" in p:
+            continue
+        for n in set(tok.findall(text)) & want:
+            users[n].add(rel(p))
+    return users
+
+
+def render():
+    rows, headered, texts = scan()
+    names = options()
+    users = option_readers(names, texts)
+    o = []
+    w = o.append
+    w("# rusolve code map\n")
+    w("<!-- GENERATED by tools/gen_codemap.py from the `//! HiGHS source:` headers. Do not edit; run the "
+      "script. `python3 tools/gen_agent_docs.py --check` and a cli test fail when this file is stale. -->\n")
+    w("Where each HiGHS source file lives in the Rust port, and which files read each option. Per-directory "
+      "rules and change recipes are in the `AGENTS.md` next to the code; contributor skills are in "
+      "[docs/skills](../skills).\n")
+    hfiles = {r[0] for r in rows if HFILE.fullmatch(r[0])}
+    w(f"- Rust files with a `//! HiGHS source:` header: **{headered}**")
+    w(f"- distinct HiGHS source files named: **{len(hfiles)}**")
+    w(f"- header-to-Rust mappings below: **{len(rows)}**")
+    w(f"- HiGHS options (fields of `HighsOptions`): **{len(names)}**\n")
+    w("## HiGHS file to Rust file\n")
+    w("A header that names a directory or no single file (crate roots, `mod.rs`) appears under that text. "
+      "Key items are the first public types, then functions.\n")
+    w("| HiGHS file | Rust file | key pub items |\n|---|---|---|")
+    for h, r, items in rows:
+        w(f"| `{h}` | `{r}` | {items} |")
+    w("\n## Option to reading files\n")
+    w("An option is read where its field is accessed (`<expr>.<option>`) outside the option tables "
+      "(`highs_options.rs`, `highs_option_records.rs`), tests and benches. Wiring a new option: see "
+      "[contrib-add-option](../skills/contrib-add-option/SKILL.md).\n")
+    w("| option | read in |\n|---|---|")
+    for n in names:
+        fs = sorted(users[n])
+        shown = ", ".join(f"`{f}`" for f in fs[:6]) + (f" (+{len(fs) - 6} more)" if len(fs) > 6 else "")
+        w(f"| `{n}` | {shown or 'only the option tables'} |")
+    w("")
+    return "\n".join(o), headered
+
+
+PATH_TOKEN = re.compile(r"`([^`\s]+)`")
+PATH_EXT = (".rs", ".md", ".py", ".sh", ".toml", ".tsv", ".jsonl", ".json", ".txt")
+
+
+def agents_files():
+    out = []
+    for c in sorted(os.listdir(CRATES)):
+        if os.path.isdir(os.path.join(CRATES, c)):
+            out.append(os.path.join(CRATES, c, "AGENTS.md"))
+    out += [os.path.join(EKK_SRC, s, "AGENTS.md") for s in SUBSYSTEMS]
+    return out
+
+
+_INDEX = None
+
+
+def path_index():
+    """Every path under crates/, docs/, tools/, evals/ (and the root), as sets of '/'-joined suffixes."""
+    global _INDEX
+    if _INDEX is None:
+        names, sufs = set(), set()
+        skip = {"target", ".git", "node_modules", "data", "logs", "results"}
+        for top in ("crates", "docs", "tools", "evals"):
+            for base, dirs, files in os.walk(os.path.join(ROOT, top)):
+                dirs[:] = [d for d in dirs if d not in skip and not d.startswith(".venv")]
+                for n in dirs + files:
+                    full = os.path.relpath(os.path.join(base, n), ROOT).split(os.sep)
+                    names.add(n)
+                    for i in range(len(full)):
+                        sufs.add("/".join(full[i:]))
+        _INDEX = (names, sufs)
+    return _INDEX
+
+
+def exists_somewhere(tok):
+    """A path an AGENTS.md names: exact from the repo, the file's directory, its crate, or a unique suffix."""
+    names, sufs = path_index()
+    t = tok.rstrip("/")
+    return t in sufs if "/" in t else t in names
+
+
+def check_agents(files, require=True):
+    problems = []
+    for f in files:
+        r = rel(f)
+        if not os.path.isfile(f):
+            if require:
+                problems.append(f"{r} is missing")
+            continue
+        text = open(f).read()
+        base = os.path.dirname(f)
+        crate = base
+        while os.path.dirname(crate) not in (CRATES, crate):
+            crate = os.path.dirname(crate)
+        for tok in sorted(set(PATH_TOKEN.findall(text))):
+            t = tok.split("::")[0].split("#")[0].rstrip(".,;:")
+            if any(c in t for c in "*<>{}$=|()") or t.startswith(("-", "http", "/", "~")):
+                continue
+            if not (t.endswith(PATH_EXT) or t.endswith("/")):
+                continue
+            cands = [os.path.join(ROOT, t), os.path.join(base, t), os.path.join(crate, t), os.path.join(crate, "src", t),
+                     os.path.join(EKK_SRC, t)]
+            if not any(os.path.exists(c) for c in cands) and not exists_somewhere(t):
+                problems.append(f"{r}: names `{tok}` which does not exist")
+        n = len(text.rstrip("\n").split("\n"))
+        if not 30 <= n <= 60:
+            problems.append(f"{r}: {n} lines, want 30-60")
+    return problems
+
+
+def main():
+    argv = sys.argv[1:]
+    if "--check-agents" in argv:
+        files = [a if os.path.isabs(a) else os.path.join(os.getcwd(), a) for a in argv[argv.index("--check-agents") + 1:]]
+        bad = check_agents(files)
+        sys.stderr.write("\n".join(bad) + ("\n" if bad else ""))
+        return 1 if bad else 0
+    text, headered = render()
+    if "--check" in argv:
+        bad = []
+        have = open(OUT).read() if os.path.exists(OUT) else ""
+        if have != text:
+            bad.append("docs/agent/codemap.md is stale: run `python3 tools/gen_codemap.py` and commit")
+        bad += check_agents(agents_files())
+        if bad:
+            sys.stderr.write("\n".join(bad) + "\n")
+            return 1
+        return 0
+    os.makedirs(os.path.dirname(OUT), exist_ok=True)
+    with open(OUT, "w") as f:
+        f.write(text)
+    print(f"wrote {OUT}: {headered} Rust files with a HiGHS source header")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

@@ -1,0 +1,14 @@
+{
+  "name": "rusolve",
+  "owner": {
+    "name": "rusolve contributors"
+  },
+  "plugins": [
+    {
+      "name": "rusolve-skills",
+      "source": "./",
+      "description": "Playbook skills for formulating, solving, debugging and tuning models with rusolve"
+    }
+  ],
+  "description": "Agent playbooks for the rusolve optimization solver"
+}

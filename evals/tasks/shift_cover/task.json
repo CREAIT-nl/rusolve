@@ -1,0 +1,10 @@
+{
+  "id": "shift_cover",
+  "title": "Staff a week with five-day shifts (an integer program)",
+  "kind": "model",
+  "modes": [
+    "python",
+    "highs-mcp"
+  ],
+  "prompt": "A shop needs at least 17, 13, 15, 19, 14, 16, 11 staff on Monday to Sunday. Every worker works five consecutive days (wrapping over the weekend) and is named after the day the shift starts. A worker starting Monday to Friday costs 100 per week, one starting Saturday or Sunday costs 120. Workers are whole persons. Minimise the weekly cost.\nName the integer variables `start_mon`, `start_tue`, `start_wed`, `start_thu`, `start_fri`, `start_sat`, `start_sun` (number of workers starting that day).\n\nReport values at the full precision the solver returns.\n\nEnd your final message with one line of the form\nANSWER: {\"status\": \"<solution status string>\", \"objective\": <number>, \"plan\": {\"<variable name>\": <value>, ...}}\nwhere `plan` lists every decision variable named above by exactly the name given (zeros may be left out), and `status` is \"Optimal\" when the solver proves optimality."
+}

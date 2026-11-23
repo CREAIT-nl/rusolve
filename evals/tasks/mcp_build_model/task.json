@@ -1,0 +1,9 @@
+{
+  "id": "mcp_build_model",
+  "title": "Build a bakery model through MCP (an integer program)",
+  "kind": "model",
+  "modes": [
+    "mcp"
+  ],
+  "prompt": "A bakery makes three products in whole batches: loaves, rolls and cakes. Profit per batch (euro) is 30, 18 and 45. Oven time per batch is 3, 1 and 4 hours, with 40 oven hours available; flour per batch is 5, 2 and 6 kg, with 70 kg available. At most 4 batches of cakes can be sold. Rolls batches may not exceed 1.5 times the loaves batches. Maximise the total profit.\nName the integer variables `loaves`, `rolls`, `cakes` (batches).\n\nNo model file is given: write the model yourself. Use the MCP tool build_model (the model as JSON) or load_model with LP text, then solve it. Report values at the full precision the solver returns.\n\nEnd your final message with one line of the form\nANSWER: {\"status\": \"<solution status string>\", \"objective\": <number>, \"plan\": {\"<variable name>\": <value>, ...}}\nwhere `plan` lists every decision variable named above by exactly the name given (zeros may be left out), and `status` is \"Optimal\" when the solver proves optimality."
+}

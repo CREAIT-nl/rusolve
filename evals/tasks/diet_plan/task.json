@@ -1,0 +1,10 @@
+{
+  "id": "diet_plan",
+  "title": "Plan a daily diet (a linear program)",
+  "kind": "model",
+  "modes": [
+    "python",
+    "highs-mcp"
+  ],
+  "prompt": "A canteen plans one day's menu from four foods, bought in fractional servings: bread, milk, eggs, beans. Per serving the cost (euro), calories, protein (g) and calcium (mg) are:\n- bread: 0.5, 250, 8, 20\n- milk: 0.8, 120, 8, 300\n- eggs: 1.2, 80, 6, 50\n- beans: 0.6, 300, 15, 100\nThe day must supply at least 2000 calories, at least 60 g protein and at least 800 mg calcium. At most 8 servings of any one food may be used. Beans may provide at most 40% of the total calories of the day. Minimise the total cost.\nName the variables `bread`, `milk`, `eggs`, `beans` (servings).\n\nReport values at the full precision the solver returns.\n\nEnd your final message with one line of the form\nANSWER: {\"status\": \"<solution status string>\", \"objective\": <number>, \"plan\": {\"<variable name>\": <value>, ...}}\nwhere `plan` lists every decision variable named above by exactly the name given (zeros may be left out), and `status` is \"Optimal\" when the solver proves optimality."
+}

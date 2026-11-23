@@ -1,0 +1,6 @@
+{
+  "id": "class_lotsizing",
+  "title": "Lot-sizing with loose setup bounds",
+  "kind": "class-lotsizing",
+  "prompt": "The file {dir}/model.lp is a multi-period lot-sizing model with setup binaries. Solve it with rusolve, run rusolve's lint, and report the status, the objective, and the number of rows the `big-m` lint rule flags (the `count` of that finding), and the playbook skill that fits (one of: rusolve-assignment-transport-flow, rusolve-set-cover-packing, rusolve-scheduling, rusolve-lot-sizing, rusolve-facility-location, rusolve-routing, rusolve-piecewise-semi, rusolve-convex-qp).\n\nEnd your final message with one line of the form\nANSWER: {\"status\": \"<status>\", \"objective\": <number>, \"big_m_rows\": <number>, \"playbook\": \"<skill name>\"}"
+}

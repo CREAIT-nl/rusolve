@@ -1,0 +1,6 @@
+{
+  "id": "verify_formulation",
+  "title": "Verify a candidate solution against a formulation",
+  "kind": "verify",
+  "prompt": "The MIP in {dir}/model.mps has integer columns x, y, z. A colleague claims this is a feasible solution: x=3, y=2, z=1.5, w=8 (the same values are in {dir}/candidate.json in rusolve's solution-JSON format). Check the claim with the rusolve tools. Report whether the solution is feasible and the names of every row and column it violates (a column is violated when it breaks its bounds or its integrality).\n\nEnd your final message with one line of the form\nANSWER: {\"feasible\": <true|false>, \"violations\": [\"<row or column name>\", ...]}"
+}

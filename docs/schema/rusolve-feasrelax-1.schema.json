@@ -1,0 +1,140 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://rusolve.dev/schema/rusolve-feasrelax-1.schema.json",
+  "title": "rusolve.feasrelax/1",
+  "description": "The object `rusolve feasrelax <model.mps> --format json` writes on stdout. Written by crates/rusolve-cli/src/feasrelax.rs. Names are the model's own MPS names. Numbers are JSON numbers; a value that does not exist (no relaxed point) is null.",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "input",
+    "mode",
+    "weights",
+    "status",
+    "relaxed",
+    "edits",
+    "summary",
+    "verified",
+    "verification",
+    "notes",
+    "time_s"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": { "const": "rusolve.feasrelax/1" },
+    "input": {
+      "type": "object",
+      "required": ["path", "rows", "cols", "integer_cols"],
+      "properties": {
+        "path": { "type": "string" },
+        "rows": { "type": "integer" },
+        "cols": { "type": "integer" },
+        "integer_cols": { "type": "integer" }
+      }
+    },
+    "mode": { "enum": ["weighted", "min-count"] },
+    "weights": {
+      "description": "The HiGHS arguments as given; a negative weight means the bound is not relaxed.",
+      "type": "object",
+      "required": [
+        "global_lower_penalty",
+        "global_upper_penalty",
+        "global_rhs_penalty",
+        "penalties_file"
+      ],
+      "properties": {
+        "global_lower_penalty": { "type": "number" },
+        "global_upper_penalty": { "type": "number" },
+        "global_rhs_penalty": { "type": "number" },
+        "penalties_file": { "type": ["string", "null"] }
+      }
+    },
+    "status": {
+      "description": "Feasible: nothing needs relaxing. Relaxed: the listed constraints give way. NotRelaxable: the bounds that may not be relaxed conflict.",
+      "enum": ["Feasible", "Relaxed", "NotRelaxable"]
+    },
+    "relaxed": {
+      "description": "Each relaxed row side or column bound.",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "kind",
+          "name",
+          "index",
+          "bound",
+          "original_bound",
+          "relaxed_to",
+          "violation",
+          "weight",
+          "penalty"
+        ],
+        "properties": {
+          "kind": { "enum": ["row", "column"] },
+          "name": { "type": "string" },
+          "index": { "type": "integer" },
+          "bound": { "enum": ["lower", "upper"] },
+          "original_bound": { "type": "number" },
+          "relaxed_to": { "type": "number" },
+          "violation": { "type": "number" },
+          "weight": { "type": "number" },
+          "penalty": { "type": "number" }
+        }
+      }
+    },
+    "edits": {
+      "description": "Ready-to-apply bound changes; applying all of them makes the model feasible.",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["kind", "name", "bound", "from", "to", "text"],
+        "properties": {
+          "kind": { "enum": ["row", "column"] },
+          "name": { "type": "string" },
+          "bound": { "enum": ["lower", "upper"] },
+          "from": { "type": "number" },
+          "to": { "type": "number" },
+          "text": { "type": "string" }
+        }
+      }
+    },
+    "summary": {
+      "type": "object",
+      "required": [
+        "relaxed_count",
+        "total_violation",
+        "total_penalty",
+        "solver_objective",
+        "objective_original",
+        "objective_after_edits"
+      ],
+      "properties": {
+        "relaxed_count": { "type": "integer" },
+        "total_violation": { "type": "number" },
+        "total_penalty": { "description": "sum of weight * violation", "type": "number" },
+        "solver_objective": {
+          "description": "objective of the relaxation problem the solver solved (weighted mode: the total penalty; min-count: the count)",
+          "type": ["number", "null"]
+        },
+        "objective_original": {
+          "description": "the relaxed point under the original objective",
+          "type": ["number", "null"]
+        },
+        "objective_after_edits": {
+          "description": "optimum of the original model with the edits applied",
+          "type": ["number", "null"]
+        }
+      }
+    },
+    "verified": {
+      "description": "true iff the original model with the edits applied is feasible",
+      "type": "boolean"
+    },
+    "verification": {
+      "type": "object",
+      "required": ["status"],
+      "properties": { "status": { "type": "string" } }
+    },
+    "notes": { "type": "array", "items": { "type": "string" } },
+    "time_s": { "type": "number" }
+  }
+}

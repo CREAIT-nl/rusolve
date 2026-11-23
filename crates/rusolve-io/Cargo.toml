@@ -1,0 +1,19 @@
+[package]
+name = "rusolve-io"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+rusolve-core = { workspace = true }
+# Decompressors: all pure Rust, so the crate builds anywhere rustc does
+# (no C toolchain, no system libraries, WASM included). gzip uses the
+# zlib-rs backend: rail4284.mps.gz (31 MB -> 388 MB) decodes in ~0.20 s vs
+# ~0.29 s with the default miniz_oxide.
+flate2 = { version = "1", default-features = false, features = ["zlib-rs"] }
+# libbz2-rs-sys (pure-Rust port of libbzip2) is bzip2 0.6's default backend.
+bzip2 = "0.6"
+lzma-rs = "0.3"
+ruzstd = "0.9"
+serde_json = "1"

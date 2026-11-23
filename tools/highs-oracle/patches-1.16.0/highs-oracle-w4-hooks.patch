@@ -1,0 +1,285 @@
+# rusolve highs-oracle W4 hooks (HiPO trace, w4/orderings and w4/hipo fixtures).
+# Applied with patch -p1 AFTER highs-oracle-w3-hooks.patch; own stamp
+# target/highs-oracle/highs-src.w4.stamp. See README.md / FORMAT.md ("W4 records").
+--- a/highs/ipm/hipo/ipm/FactorHighsSolver.cpp
++++ b/highs/ipm/hipo/ipm/FactorHighsSolver.cpp
+@@ -6,6 +6,7 @@
+ #include "Status.h"
+ #include "ipm/hipo/auxiliary/Auxiliary.h"
+ #include "ipm/hipo/auxiliary/Logger.h"
++#include "ipm/hipo/HighsOracleW4Dump.h"  // rusolve oracle instrumentation
+ #include "parallel/HighsParallel.h"
+ #include "util/stringutil.h"
+ 
+@@ -182,6 +183,10 @@
+     setParallelBeforeSymbolic();
+     if (Int status = setNla()) return status;
+     setParallelAfterSymbolic();
++    highsOracleW4Fact(  // rusolve oracle
++        options_.nla == kHipoAugmentedString ? "AS" : "NE",
++        options_.nla == kHipoAugmentedString ? ordering_AS_ : ordering_NE_,
++        kkt_.S.flops(), kkt_.S.spops(), (double)kkt_.S.nz());
+     printParallel();
+     info_.times[kAnalyseTime] += clock.stop();
+ 
+@@ -426,6 +431,8 @@
+ 
+     logger_.printInfo("Finished %s for %s\n", orderings_to_try[i].c_str(),
+                       nla.c_str());
++    highsOracleW4Ord(nla, orderings_to_try[i], n, failure[i] != 0,  // rusolve oracle
++                     full_ptr, full_rows, permutations[i]);
+ 
+     if (failure[i]) {
+       logger_.printInfo("Error with %s for %s\n", orderings_to_try[i].c_str(),
+--- a/highs/ipm/hipo/ipm/Solver.cpp
++++ b/highs/ipm/hipo/ipm/Solver.cpp
+@@ -7,6 +7,7 @@
+ #include "UpLookingSolver.h"
+ #include "ipm/IpxWrapper.h"
+ #include "ipm/hipo/auxiliary/Logger.h"
++#include "ipm/hipo/HighsOracleW4Dump.h"  // rusolve oracle instrumentation
+ #include "lp_data/HighsSolution.h"
+ #include "parallel/HighsParallel.h"
+ 
+@@ -180,6 +181,8 @@
+     if (predictor()) break;
+     if (correctors()) break;
+     makeStep();
++    highsOracleW4Iter(iter_, *it_, alpha_primal_, alpha_dual_,  // rusolve oracle
++                      sigma_, info_.correctors);
+     printOutput();
+   }
+ }
+--- a/highs/ipm/IpxWrapper.cpp
++++ b/highs/ipm/IpxWrapper.cpp
+@@ -16,6 +16,7 @@
+ #include "HighsExternalApi.h"
+ #include "lp_data/HighsOptions.h"
+ #include "lp_data/HighsSolution.h"
++#include "ipm/hipo/HighsOracleW4Dump.h"  // rusolve oracle instrumentation
+ #include "util/stringutil.h"
+ 
+ using std::min;
+@@ -530,6 +531,7 @@
+ 
+   // Get solver and solution information.
+   const hipo::Info hipo_info = hipo.getInfo();
++  highsOracleW4HipoEnd(hipo_info);  // rusolve oracle
+   hipo::Status solve_status = hipo_info.status;
+   highs_info.ipm_iteration_count +=
+       hipo_info.ipm_iter + hipo_info.ipx_info.iter;
+--- /dev/null
++++ b/highs/ipm/hipo/HighsOracleW4Dump.h
+@@ -0,0 +1,212 @@
++// rusolve oracle instrumentation -- NOT part of upstream HiGHS.
++//
++// Added by tools/highs-oracle/highs-oracle-w4-hooks.patch (applied after
++// highs-oracle-w3-hooks.patch, with its own stamp). When the environment
++// variable HIGHS_ORACLE_HIPO_DUMP names a file, the patched HiPO appends one
++// JSON line at each hook site:
++//
++//   hipo_ord   FactorHighsSolver.cpp chooseOrdering, inside the lambda
++//              run_ordering_and_analyse, right after the "Finished %s for %s"
++//              printInfo (before the failure[i] test)
++//   hipo_fact  FactorHighsSolver.cpp setup, right after setParallelAfterSymbolic()
++//   hipo_iter  Solver.cpp Solver::runIpm, right after each makeStep()
++//   hipo_end   IpxWrapper.cpp solveHipo, right after
++//              const hipo::Info hipo_info = hipo.getInfo()
++//
++// Records are described in tools/highs-oracle/FORMAT.md ("W4 records") and
++// mirrored byte for byte by crates/rusolve-ekk/src/ipm/hipo/oracle_trace.rs.
++// Doubles are the 16 hex digits of their bit pattern; double vectors are
++// FNV-1a 64 hashes of the little-endian bit patterns; integer vectors are
++// written in full. The file is opened in append mode by the first record of
++// the process (the oracle writes the w4_header line before the run), so the
++// hook lines land in place; every record is flushed. Without the variable
++// nothing is written. The functions only read solver state.
++//
++// HiPO is C++ only, so the shared dump state lives in function-local statics
++// of inline functions (one instance per program, whatever the number of
++// translation units that include this header).
++#ifndef HIPO_HIGHSORACLEW4DUMP_H_
++#define HIPO_HIGHSORACLEW4DUMP_H_
++
++#include <cinttypes>
++#include <cstdint>
++#include <cstdio>
++#include <cstdlib>
++#include <cstring>
++#include <string>
++#include <vector>
++
++struct HighsOracleW4State {
++  FILE* file = nullptr;
++  bool opened = false;
++  long long call = 0;
++};
++
++inline HighsOracleW4State& highsOracleW4State() {
++  static HighsOracleW4State state;
++  return state;
++}
++
++// The dump file (opened on first use), or nullptr when HIGHS_ORACLE_HIPO_DUMP
++// is unset or empty.
++inline FILE* highsOracleW4File() {
++  HighsOracleW4State& s = highsOracleW4State();
++  if (!s.opened) {
++    const char* path = std::getenv("HIGHS_ORACLE_HIPO_DUMP");
++    s.opened = true;
++    if (path != nullptr && path[0] != '\0') s.file = std::fopen(path, "ab");
++  }
++  return s.file;
++}
++
++// The 0-based counter over the hook lines of the process.
++inline long long* highsOracleW4Call() { return &highsOracleW4State().call; }
++
++// Closes the dump file; the next record reopens it (append).
++inline void highsOracleW4Close() {
++  HighsOracleW4State& s = highsOracleW4State();
++  if (s.file != nullptr) std::fclose(s.file);
++  s.file = nullptr;
++  s.opened = false;
++}
++
++inline void highsOracleW4F(FILE* f, const char* key, double v) {
++  uint64_t bits;
++  std::memcpy(&bits, &v, 8);
++  std::fprintf(f, ",\"%s\":\"%016" PRIx64 "\"", key, bits);
++}
++
++inline void highsOracleW4I(FILE* f, const char* key, long long v) {
++  std::fprintf(f, ",\"%s\":%lld", key, v);
++}
++
++inline void highsOracleW4S(FILE* f, const char* key, const std::string& v) {
++  std::fprintf(f, ",\"%s\":\"%s\"", key, v.c_str());
++}
++
++// An integer vector in full: ,"key":[1,2,3] ([] when empty).
++template <typename T>
++inline void highsOracleW4IV(FILE* f, const char* key, const std::vector<T>& v) {
++  std::fprintf(f, ",\"%s\":[", key);
++  for (size_t k = 0; k < v.size(); ++k)
++    std::fprintf(f, k > 0 ? ",%lld" : "%lld", (long long)v[k]);
++  std::fputc(']', f);
++}
++
++// FNV-1a 64 over the little-endian bit patterns of v.
++inline void highsOracleW4H(FILE* f, const char* key,
++                           const std::vector<double>& v) {
++  uint64_t h = 0xcbf29ce484222325ULL;
++  for (size_t i = 0; i < v.size(); ++i) {
++    uint64_t bits;
++    std::memcpy(&bits, &v[i], 8);
++    for (int b = 0; b < 8; ++b) {
++      h ^= (bits >> (8 * b)) & 0xff;
++      h *= 0x100000001b3ULL;
++    }
++  }
++  std::fprintf(f, ",\"%s\":\"%016" PRIx64 "\"", key, h);
++}
++
++// Starts record t ({"t":"<t>","call":N), or returns nullptr when disabled.
++inline FILE* highsOracleW4Begin(const char* t) {
++  FILE* f = highsOracleW4File();
++  if (f == nullptr) return nullptr;
++  long long* call = highsOracleW4Call();
++  std::fprintf(f, "{\"t\":\"%s\",\"call\":%lld", t, *call);
++  ++*call;
++  return f;
++}
++
++inline void highsOracleW4Finish(FILE* f) {
++  std::fputs("}\n", f);
++  std::fflush(f);
++}
++
++// hipo_ord: one fill-reducing ordering of chooseOrdering.
++template <typename IntT>
++inline void highsOracleW4Ord(const std::string& nla,
++                             const std::string& ordering, IntT n, bool failure,
++                             const std::vector<IntT>& ptr,
++                             const std::vector<IntT>& rows,
++                             const std::vector<IntT>& perm) {
++  FILE* f = highsOracleW4Begin("hipo_ord");
++  if (f == nullptr) return;
++  highsOracleW4S(f, "nla", nla);
++  highsOracleW4S(f, "ordering", ordering);
++  highsOracleW4I(f, "n", (long long)n);
++  highsOracleW4I(f, "failure", failure ? 1 : 0);
++  highsOracleW4IV(f, "ptr", ptr);
++  highsOracleW4IV(f, "rows", rows);
++  highsOracleW4IV(f, "perm", perm);
++  highsOracleW4Finish(f);
++}
++
++// hipo_fact: the factorisation chosen by FactorHighsSolver::setup.
++inline void highsOracleW4Fact(const std::string& nla,
++                              const std::string& ordering, double flops,
++                              double spops, double nz) {
++  FILE* f = highsOracleW4Begin("hipo_fact");
++  if (f == nullptr) return;
++  highsOracleW4S(f, "nla", nla);
++  highsOracleW4S(f, "ordering", ordering);
++  highsOracleW4F(f, "flops", flops);
++  highsOracleW4F(f, "spops", spops);
++  highsOracleW4F(f, "nz", nz);
++  highsOracleW4Finish(f);
++}
++
++// hipo_iter: one IPM iteration of Solver::runIpm, after makeStep(). `it` is
++// the hipo::Iterate (x, xl, xu, y, zl, zu, pobj, dobj, pinf, dinf, pdgap, mu).
++template <typename IterateT>
++inline void highsOracleW4Iter(long long iter, const IterateT& it,
++                              double alpha_p, double alpha_d, double sigma,
++                              long long correctors) {
++  FILE* f = highsOracleW4Begin("hipo_iter");
++  if (f == nullptr) return;
++  highsOracleW4I(f, "iter", iter);
++  highsOracleW4F(f, "pobj", it.pobj);
++  highsOracleW4F(f, "dobj", it.dobj);
++  highsOracleW4F(f, "pinf", it.pinf);
++  highsOracleW4F(f, "dinf", it.dinf);
++  highsOracleW4F(f, "pdgap", it.pdgap);
++  highsOracleW4F(f, "mu", it.mu);
++  highsOracleW4F(f, "alpha_p", alpha_p);
++  highsOracleW4F(f, "alpha_d", alpha_d);
++  highsOracleW4F(f, "sigma", sigma);
++  highsOracleW4I(f, "correctors", correctors);
++  highsOracleW4H(f, "h_x", it.x);
++  highsOracleW4H(f, "h_xl", it.xl);
++  highsOracleW4H(f, "h_xu", it.xu);
++  highsOracleW4H(f, "h_y", it.y);
++  highsOracleW4H(f, "h_zl", it.zl);
++  highsOracleW4H(f, "h_zu", it.zu);
++  highsOracleW4Finish(f);
++}
++
++// hipo_end: the hipo::Info returned by getInfo() in solveHipo.
++template <typename InfoT>
++inline void highsOracleW4HipoEnd(const InfoT& info) {
++  FILE* f = highsOracleW4Begin("hipo_end");
++  if (f == nullptr) return;
++  highsOracleW4I(f, "status", (long long)info.status);
++  highsOracleW4I(f, "ipm_iter", (long long)info.ipm_iter);
++  highsOracleW4I(f, "ipx_used", info.ipx_used ? 1 : 0);
++  highsOracleW4I(f, "ipx_iter", (long long)info.ipx_info.iter);
++  highsOracleW4I(f, "status_crossover",
++                 (long long)info.ipx_info.status_crossover);
++  highsOracleW4I(f, "updates_crossover",
++                 (long long)info.ipx_info.updates_crossover);
++  highsOracleW4I(f, "m_solver", (long long)info.m_solver);
++  highsOracleW4I(f, "n_solver", (long long)info.n_solver);
++  highsOracleW4F(f, "p_obj", info.p_obj);
++  highsOracleW4F(f, "d_obj", info.d_obj);
++  highsOracleW4F(f, "pd_gap", info.pd_gap);
++  highsOracleW4F(f, "p_res_abs", info.p_res_abs);
++  highsOracleW4F(f, "p_res_rel", info.p_res_rel);
++  highsOracleW4F(f, "d_res_abs", info.d_res_abs);
++  highsOracleW4F(f, "d_res_rel", info.d_res_rel);
++  highsOracleW4Finish(f);
++}
++
++#endif  // HIPO_HIGHSORACLEW4DUMP_H_

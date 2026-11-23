@@ -1,0 +1,32 @@
+name: Bug report
+description: A crash, a wrong answer, or behaviour that contradicts the docs
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you ran, what you expected, and what you got instead.
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: How to reproduce
+      description: The exact command or Python code. Attach the model file (or the smallest model that shows the problem) if you can share it.
+      render: shell
+    validations:
+      required: true
+  - type: textarea
+    id: output
+    attributes:
+      label: Output
+      description: The full output, ideally with `--format json`.
+      render: text
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: The commit (`git rev-parse --short HEAD`) or the wheel version, and your OS.
+    validations:
+      required: true

@@ -1,0 +1,22 @@
+name: Feature or technique
+description: Propose a feature, or a technique from a paper or another open-source solver
+labels: [enhancement]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What and why
+      description: What you would like rusolve to do, and the problem it solves.
+    validations:
+      required: true
+  - type: textarea
+    id: source
+    attributes:
+      label: Source
+      description: For an algorithmic technique, the paper, documentation or open-source code it comes from (with its license).
+  - type: checkboxes
+    id: contribute
+    attributes:
+      label: Contributing
+      options:
+        - label: I would like to implement this myself.

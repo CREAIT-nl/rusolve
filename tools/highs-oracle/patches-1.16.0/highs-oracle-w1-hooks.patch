@@ -1,0 +1,188 @@
+# rusolve highs-oracle W1 hooks (QUASS per-pass trace, w1/qp fixtures).
+# Applied with patch -p1 AFTER highs-oracle-ipx-hooks.patch; own stamp
+# target/highs-oracle/highs-src.w1.stamp. See README.md / FORMAT.md ("W1 records").
+--- a/highs/qpsolver/gradient.hpp
++++ b/highs/qpsolver/gradient.hpp
+@@ -29,6 +29,10 @@
+     numupdates = 0;
+   }
+ 
++  // rusolve oracle: the stored gradient, without the recompute that
++  // getGradient() may trigger (reading it must not change the solve).
++  const QpVector& oracleGradient() const { return gradient; }
++
+   QpVector& getGradient() {
+     if (!uptodate ||
+         numupdates >= runtime.settings.gradientrecomputefrequency) {
+--- a/highs/qpsolver/quass.cpp
++++ b/highs/qpsolver/quass.cpp
+@@ -6,6 +6,7 @@
+ /*                                                                       */
+ /* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
+ #include "qpsolver/quass.hpp"
++#include "qpsolver/HighsOracleQpDump.h"  // rusolve oracle instrumentation
+ 
+ #include <fenv.h>
+ 
+@@ -428,6 +429,7 @@
+ 
+     bool zero_curvature_direction = false;
+     double maxsteplength = 1.0;
++    HighsInt oracle_minidx = -1;  // rusolve oracle: pricing result of this pass
+     if (atfsep) {
+       // Determine a variable to relax from being active. If there is
+       // none, then basis is optimal
+@@ -436,6 +438,7 @@
+         runtime.status = QpModelStatus::kOptimal;
+         break;
+       }
++      oracle_minidx = minidx;
+       // Now perform a real iteration
+       runtime.statistics.num_iterations++;
+ 
+@@ -477,6 +480,10 @@
+         (false && fabs(gradient.getGradient().dot(p)) <
+                       runtime.settings.improvement_zero_threshold)) {
+       atfsep = true;
++      highsOracleQpIter(runtime.statistics.num_iterations, atfsep, oracle_minidx, -2,
++                        0.0, basis.getnumactive(), basis.getnuminactive(),
++                        runtime.primal, runtime.rowactivity,
++                        gradient.oracleGradient(), p);
+     } else {
+       // Now perform a real iteration
+       runtime.statistics.num_iterations++;
+@@ -546,10 +553,17 @@
+ 
+       gradient.update(buffer_Qp, stepres.alpha);
+       redcosts.update();
++      highsOracleQpIter(runtime.statistics.num_iterations, atfsep, oracle_minidx,
++                        stepres.limitingconstraint, stepres.alpha,
++                        basis.getnumactive(), basis.getnuminactive(),
++                        runtime.primal, runtime.rowactivity,
++                        gradient.oracleGradient(), p);
+     }
+   }
+ 
+   loginformation(runtime, basis, factor, timer);
++  highsOracleQpEnd(runtime.statistics.num_iterations, HighsInt(runtime.status),
++                   runtime.primal, runtime.rowactivity);
+   runtime.settings.iteration_log.fire(runtime.statistics);
+   //  basis.report();
+ 
+--- /dev/null
++++ b/highs/qpsolver/HighsOracleQpDump.h
+@@ -0,0 +1,114 @@
++/* rusolve oracle instrumentation -- NOT part of upstream HiGHS.
++ *
++ * Added by tools/highs-oracle/highs-oracle-w1-hooks.patch (applied after
++ * highs-oracle-ipx-hooks.patch, with its own stamp). When the environment
++ * variable HIGHS_ORACLE_QP_DUMP names a file, the patched QUASS appends one
++ * "qp_iter" JSON line at the end of every pass of the while (true) loop of
++ * Quass::solve (after redcosts.update() on a step, after atfsep = true on a
++ * null step) and one "qp_end" line after the post-loop loginformation.
++ * Records are described in tools/highs-oracle/FORMAT.md ("W1 records").
++ * Doubles are the 16 hex digits of their bit pattern; vectors are FNV-1a 64
++ * hashes of the bit patterns of QpVector::value[0..dim). The file is opened
++ * in append mode by the first record of the process (the oracle writes the
++ * w1_header line before the run), so the hook lines land in place. Without
++ * the variable nothing is written. The functions only read solver state:
++ * the gradient is read through Gradient::oracleGradient(), never through
++ * getGradient(), which may recompute it.
++ */
++#ifndef QPSOLVER_HIGHSORACLEQPDUMP_H_
++#define QPSOLVER_HIGHSORACLEQPDUMP_H_
++
++#include <cstdint>
++#include <cstdio>
++#include <cstdlib>
++#include <cstring>
++
++#include "qpsolver/qpvector.hpp"
++
++// The dump file, or nullptr when HIGHS_ORACLE_QP_DUMP is unset.
++inline std::FILE* highsOracleQpFile() {
++  static std::FILE* file = nullptr;
++  static bool opened = false;
++  if (!opened) {
++    opened = true;
++    const char* path = std::getenv("HIGHS_ORACLE_QP_DUMP");
++    if (path != nullptr && path[0] != '\0') file = std::fopen(path, "ab");
++  }
++  return file;
++}
++
++inline long long& highsOracleQpCall() {
++  static long long call = 0;
++  return call;
++}
++
++inline void highsOracleQpF(std::FILE* f, const char* key, double v) {
++  uint64_t bits;
++  std::memcpy(&bits, &v, 8);
++  std::fprintf(f, ",\"%s\":\"%016llx\"", key, (unsigned long long)bits);
++}
++
++inline void highsOracleQpI(std::FILE* f, const char* key, long long v) {
++  std::fprintf(f, ",\"%s\":%lld", key, v);
++}
++
++// FNV-1a 64 over the little-endian bit patterns of value[0..dim).
++inline void highsOracleQpH(std::FILE* f, const char* key, const QpVector& v) {
++  uint64_t h = 0xcbf29ce484222325ULL;
++  size_t n = v.dim > 0 ? (size_t)v.dim : 0;
++  if (n > v.value.size()) n = v.value.size();
++  for (size_t i = 0; i < n; ++i) {
++    uint64_t bits;
++    std::memcpy(&bits, &v.value[i], 8);
++    for (int b = 0; b < 8; ++b) {
++      h ^= (bits >> (8 * b)) & 0xff;
++      h *= 0x100000001b3ULL;
++    }
++  }
++  std::fprintf(f, ",\"%s\":\"%016llx\"", key, (unsigned long long)h);
++}
++
++// {"t":"qp_iter","call":<n>,"iter":..,"atfsep":0|1,"minidx":..,
++//  "limiting":..,"alpha":..,"num_active":..,"num_inactive":..,
++//  "h_primal":..,"h_rowactivity":..,"h_gradient":..,"h_p":..}
++inline void highsOracleQpIter(HighsInt iter, bool atfsep, HighsInt minidx,
++                              HighsInt limiting, double alpha,
++                              HighsInt num_active, HighsInt num_inactive,
++                              const QpVector& primal,
++                              const QpVector& rowactivity,
++                              const QpVector& gradient, const QpVector& p) {
++  std::FILE* f = highsOracleQpFile();
++  if (f == nullptr) return;
++  std::fprintf(f, "{\"t\":\"qp_iter\",\"call\":%lld", highsOracleQpCall()++);
++  highsOracleQpI(f, "iter", iter);
++  highsOracleQpI(f, "atfsep", atfsep ? 1 : 0);
++  highsOracleQpI(f, "minidx", minidx);
++  highsOracleQpI(f, "limiting", limiting);
++  highsOracleQpF(f, "alpha", alpha);
++  highsOracleQpI(f, "num_active", num_active);
++  highsOracleQpI(f, "num_inactive", num_inactive);
++  highsOracleQpH(f, "h_primal", primal);
++  highsOracleQpH(f, "h_rowactivity", rowactivity);
++  highsOracleQpH(f, "h_gradient", gradient);
++  highsOracleQpH(f, "h_p", p);
++  std::fputs("}\n", f);
++  std::fflush(f);
++}
++
++// {"t":"qp_end","call":<n>,"iter":..,"status":<QpModelStatus>,
++//  "h_primal":..,"h_rowactivity":..}
++inline void highsOracleQpEnd(HighsInt iter, HighsInt status,
++                             const QpVector& primal,
++                             const QpVector& rowactivity) {
++  std::FILE* f = highsOracleQpFile();
++  if (f == nullptr) return;
++  std::fprintf(f, "{\"t\":\"qp_end\",\"call\":%lld", highsOracleQpCall()++);
++  highsOracleQpI(f, "iter", iter);
++  highsOracleQpI(f, "status", status);
++  highsOracleQpH(f, "h_primal", primal);
++  highsOracleQpH(f, "h_rowactivity", rowactivity);
++  std::fputs("}\n", f);
++  std::fflush(f);
++}
++
++#endif

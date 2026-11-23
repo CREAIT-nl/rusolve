@@ -1,0 +1,95 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://rusolve.dev/schema/rusolve-check-conic-1.schema.json",
+  "title": "rusolve.check-conic/1",
+  "description": "The report `rusolve check <model> <solution> --format json` writes for a model with quadratic constraints or cones. Written by crates/rusolve-cli/src/check_conic.rs. The user's quadratic rows and cones are evaluated as written, never a reformulation. An interior-point answer is accurate to a relative amount, so every violation is compared with tolerance * (1 + scale) of its own item: a row's scale is the largest of its linear terms, the sum of its quadratic terms' magnitudes and its finite bounds; a cone's is the 2-norm of its variables; a column bound keeps the solution-wide max |x_j| (Clarabel scales a bound row by the global norm). One large unrelated variable loosens no row or cone. Exit code 0 whenever the check ran; 3 for an input error.",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "model",
+    "solution_path",
+    "verdict",
+    "tolerance",
+    "objective",
+    "summary",
+    "findings_total",
+    "findings_shown",
+    "findings"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": { "const": "rusolve.check-conic/1" },
+    "model": {
+      "type": "object",
+      "required": ["path", "rows", "cols", "integer_cols", "quad_rows", "cones"],
+      "additionalProperties": false,
+      "properties": {
+        "path": { "type": "string" },
+        "rows": { "type": "integer", "minimum": 0 },
+        "cols": { "type": "integer", "minimum": 0 },
+        "integer_cols": { "type": "integer", "minimum": 0 },
+        "quad_rows": { "type": "integer", "minimum": 0 },
+        "cones": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "solution_path": { "type": "string" },
+    "verdict": { "enum": ["feasible", "infeasible"] },
+    "tolerance": { "type": "number" },
+    "objective": {
+      "type": "object",
+      "required": ["value", "offset", "quadratic_part", "sense"],
+      "additionalProperties": false,
+      "properties": {
+        "value": { "type": "number", "description": "c'x + 1/2 x'Hx + offset, in the model's own sense." },
+        "offset": { "type": "number" },
+        "quadratic_part": { "type": "number" },
+        "sense": { "enum": ["minimize", "maximize"] }
+      }
+    },
+    "summary": {
+      "type": "object",
+      "required": ["column_bounds", "rows", "quad_rows", "cones", "integrality", "total_violations"],
+      "additionalProperties": false,
+      "properties": {
+        "column_bounds": { "$ref": "#/$defs/counts" },
+        "rows": { "$ref": "#/$defs/counts" },
+        "quad_rows": { "$ref": "#/$defs/counts" },
+        "cones": { "$ref": "#/$defs/counts" },
+        "integrality": { "$ref": "#/$defs/counts" },
+        "total_violations": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "findings_total": { "type": "integer", "minimum": 0 },
+    "findings_shown": { "type": "integer", "minimum": 0 },
+    "findings": {
+      "description": "Largest amount first, cut at --max-findings.",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["kind", "name", "value", "lower", "upper", "amount"],
+        "additionalProperties": false,
+        "properties": {
+          "kind": { "enum": ["column_bound", "row", "quad_row", "cone", "integrality"] },
+          "name": { "type": "string" },
+          "value": { "type": "number" },
+          "lower": { "type": ["number", "null"] },
+          "upper": { "type": ["number", "null"] },
+          "amount": { "type": "number" },
+          "cone_type": { "enum": ["SOC", "rotated SOC", "exponential", "power"] }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "counts": {
+      "type": "object",
+      "required": ["count", "max", "sum"],
+      "additionalProperties": false,
+      "properties": {
+        "count": { "type": "integer", "minimum": 0 },
+        "max": { "type": "number" },
+        "sum": { "type": "number" }
+      }
+    }
+  }
+}

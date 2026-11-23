@@ -1,0 +1,6 @@
+{
+  "id": "class_flow",
+  "title": "Transportation and flow model",
+  "kind": "class-flow",
+  "prompt": "The file {dir}/model.lp is a small network model (supplies, demands, arc costs). Use rusolve to classify it, solve it, and report the class that `rusolve mip --format json` assigns, the status and the objective, and the name of the rusolve playbook skill (one of: rusolve-assignment-transport-flow, rusolve-set-cover-packing, rusolve-scheduling, rusolve-lot-sizing, rusolve-facility-location, rusolve-routing, rusolve-piecewise-semi, rusolve-convex-qp) that fits this problem.\n\nEnd your final message with one line of the form\nANSWER: {\"class\": \"<class>\", \"status\": \"<status>\", \"objective\": <number>, \"playbook\": \"<skill name>\"}"
+}

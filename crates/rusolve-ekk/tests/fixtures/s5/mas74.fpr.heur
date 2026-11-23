@@ -1,0 +1,33 @@
+[HeurSol] name=fpr dispatch=1 worker=0 effort_at=35613 obj=53043.396104300002 accepted=1
+[HeurSol] name=fpr dispatch=1 worker=0 effort_at=77078 obj=78743.418041699988 accepted=1
+[HeurSol] name=fpr dispatch=1 worker=0 effort_at=137367 obj=39359.532231199999 accepted=1
+[HeurSol] name=fpr dispatch=1 worker=0 effort_at=176548 obj=68979.77015436998 accepted=1
+[HeurSol] name=fpr dispatch=1 worker=0 effort_at=213311 obj=49114.940342170004 accepted=1
+[HeurSol] name=fpr dispatch=1 worker=0 effort_at=285821 obj=53175.230959200002 accepted=1
+[HeurSol] name=fpr dispatch=1 worker=0 effort_at=318956 obj=67303.800670769982 accepted=1
+[HeurSol] name=fpr dispatch=1 worker=0 effort_at=354569 obj=53043.396104300002 accepted=1
+[HeurSol] name=fpr dispatch=1 worker=0 effort_at=392880 obj=71068.644567469993 accepted=1
+[HeurSol] name=fpr dispatch=1 worker=0 effort_at=434347 obj=94861.610529999991 accepted=1
+[HeurSol] name=fpr dispatch=1 worker=0 effort_at=500703 obj=45504.527197000003 accepted=1
+[HeurSol] name=fpr dispatch=1 worker=0 effort_at=536456 obj=40347.010764700004 accepted=1
+[HeurSol] name=fpr dispatch=1 worker=0 effort_at=573859 obj=52442.149262300001 accepted=1
+[HeurSol] name=fpr dispatch=1 worker=0 effort_at=654692 obj=52653.507252999996 accepted=1
+[HeurSol] name=fpr dispatch=1 worker=0 effort_at=728450 obj=53043.396104300002 accepted=1
+[HeurSol] name=fpr dispatch=1 worker=0 effort_at=767122 obj=48319.351140199993 accepted=1
+[HeurSol] name=fpr dispatch=1 worker=0 effort_at=871733 obj=37843.7826852 accepted=1
+[HeurSol] name=fpr dispatch=1 worker=0 effort_at=1225599 obj=36754.500200000002 accepted=1
+[HeurSol] name=fpr dispatch=1 worker=0 effort_at=1356448 obj=52765.94034216999 accepted=1
+[HeurSol] name=fpr dispatch=1 worker=0 effort_at=1572886 obj=32319.219651799987 accepted=1
+[HeurSol] name=fpr dispatch=1 worker=0 effort_at=1715349 obj=46929.524849200003 accepted=1
+[HeurSol] name=fpr dispatch=1 worker=0 effort_at=1824147 obj=45967.351140199993 accepted=1
+[HeurSol] name=fpr dispatch=1 worker=0 effort_at=1931645 obj=40336.056359800001 accepted=1
+[HeurSol] name=fpr dispatch=1 worker=0 effort_at=2004004 obj=45104.812407800004 accepted=1
+[Sequential] heur=fpr effort=2216096
+[Sequential] heur=fpr effort=489543
+[Sequential] heur=fpr effort=448962
+[Sequential] heur=fpr effort=445303
+[Sequential] heur=fpr effort=445303
+[Sequential] heur=fpr effort=445303
+[Sequential] heur=fpr effort=442974
+[Sequential] heur=fpr effort=517116
+final obj=11801.185728643426 status=Optimal

@@ -1,0 +1,40 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://rusolve.dev/schema/rusolve-profile-1.schema.json",
+  "title": "rusolve.profile/1",
+  "description": "A tuning profile: a base (`default` = HiGHS 1.15.1 settings, `recommended` = the CLI default), the search options that differ from it, the feature fingerprint of the instances it was tuned on, and the provenance and evidence of the run that made it. Read by `rusolve mip --profile` and `rusolve profile`; written by `rusolve profile new` and `rusolve tune`. Closed schema: an unknown top-level key is an error. Every option is validated against the option registry (`rusolve options`): name, type, range, and affects == search. Non-finite doubles are the strings \"inf\" and \"-inf\".",
+  "type": "object",
+  "required": ["schema_version", "base", "options"],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": { "const": "rusolve.profile/1" },
+    "name": { "type": "string" },
+    "base": { "enum": ["default", "recommended"] },
+    "options": {
+      "type": "object",
+      "additionalProperties": { "type": ["boolean", "integer", "number", "string"] }
+    },
+    "fingerprint": {
+      "type": "object",
+      "required": ["features_version", "features", "centroid", "spread", "min", "max", "radius", "instances"],
+      "properties": {
+        "features_version": { "type": "integer" },
+        "features": { "type": "array", "items": { "type": "string" } },
+        "centroid": { "type": "array", "items": { "type": "number" } },
+        "spread": { "type": "array", "items": { "type": "number" } },
+        "min": { "type": "array", "items": { "type": "number" } },
+        "max": { "type": "array", "items": { "type": "number" } },
+        "radius": { "type": "number" },
+        "instances": { "type": "integer" }
+      }
+    },
+    "provenance": {
+      "type": "object",
+      "description": "created, tool, metric, instances (name, sha256, role), seeds, evaluations, baseline and tuned shifted geomeans."
+    },
+    "evidence": {
+      "type": "object",
+      "description": "verdict, holdout, race, candidates, wrong_answers, known_optima (see rusolve tune)."
+    }
+  }
+}

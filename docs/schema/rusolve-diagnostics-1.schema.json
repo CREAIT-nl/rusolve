@@ -1,0 +1,67 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://rusolve.dev/schema/rusolve-diagnostics-1.schema.json",
+  "title": "rusolve.diagnostics/1",
+  "description": "A list of rustc-style diagnostics. Under --format json every error path of the CLI writes this document on stdout and exits with exit_code (2 usage, 3 input, 4 internal); the rustc-style text goes to stderr. The same document is the text content of an MCP tool result with isError true. Codes are registered in crates/rusolve-core/src/diagnostic.rs and documented in docs/agent/diagnostics.md; `rusolve --explain RSnnnn` prints the long explanation.",
+  "type": "object",
+  "required": ["schema_version", "exit_code", "diagnostics"],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": { "const": "rusolve.diagnostics/1" },
+    "exit_code": { "type": "integer" },
+    "diagnostics": { "type": "array", "items": { "$ref": "#/$defs/diagnostic" } }
+  },
+  "$defs": {
+    "diagnostic": {
+      "type": "object",
+      "required": ["code", "severity", "message", "notes", "help"],
+      "additionalProperties": false,
+      "properties": {
+        "code": { "type": "string", "pattern": "^RS[0-9]{4}$" },
+        "severity": { "enum": ["error", "warning", "note", "help"] },
+        "message": { "type": "string" },
+        "location": { "$ref": "#/$defs/location" },
+        "notes": { "type": "array", "items": { "type": "string" } },
+        "help": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "location": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": ["kind", "path", "line", "column", "length", "source_line"],
+          "additionalProperties": false,
+          "properties": {
+            "kind": { "const": "file" },
+            "path": { "type": "string" },
+            "line": { "type": "integer", "minimum": 1 },
+            "column": { "type": "integer", "minimum": 1 },
+            "length": { "type": "integer", "minimum": 1 },
+            "source_line": { "type": "string" }
+          }
+        },
+        {
+          "type": "object",
+          "required": ["kind", "name", "rendered"],
+          "additionalProperties": false,
+          "properties": {
+            "kind": { "enum": ["row", "column"] },
+            "name": { "type": "string" },
+            "rendered": { "type": "string", "description": "The constraint or variable declaration printed out, e.g. `c1: x + y <= 4`." }
+          }
+        },
+        {
+          "type": "object",
+          "required": ["kind", "path", "line", "source_line"],
+          "additionalProperties": false,
+          "properties": {
+            "kind": { "const": "python" },
+            "path": { "type": "string" },
+            "line": { "type": "integer", "minimum": 1 },
+            "source_line": { "type": "string" }
+          }
+        }
+      ]
+    }
+  }
+}

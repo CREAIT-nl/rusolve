@@ -1,0 +1,34 @@
+[HeurSol] name=fpr dispatch=1 worker=0 effort_at=260700 obj=7250 accepted=1
+[HeurSol] name=fpr dispatch=1 worker=0 effort_at=617542 obj=7250 accepted=1
+[HeurSol] name=fpr dispatch=1 worker=0 effort_at=1072474 obj=7250 accepted=1
+[HeurSol] name=fpr dispatch=1 worker=0 effort_at=1430113 obj=7250 accepted=1
+[HeurSol] name=fpr dispatch=1 worker=0 effort_at=1913072 obj=7250 accepted=1
+[HeurSol] name=fpr dispatch=1 worker=0 effort_at=2271506 obj=7250 accepted=1
+[HeurSol] name=fpr dispatch=1 worker=0 effort_at=2745117 obj=7250 accepted=1
+[HeurSol] name=fpr dispatch=1 worker=0 effort_at=3103452 obj=7250 accepted=1
+[Sequential] heur=fpr effort=3481299
+[HeurSol] name=local_mip dispatch=2 worker=0 effort_at=10400 obj=7250 accepted=1
+[HeurSol] name=local_mip dispatch=2 worker=0 effort_at=26786 obj=7009 accepted=1
+[HeurSol] name=local_mip dispatch=2 worker=0 effort_at=42861 obj=6794 accepted=1
+[HeurSol] name=local_mip dispatch=2 worker=0 effort_at=58885 obj=6464 accepted=1
+[HeurSol] name=local_mip dispatch=2 worker=0 effort_at=74858 obj=6161 accepted=1
+[HeurSol] name=local_mip dispatch=2 worker=0 effort_at=90780 obj=5823 accepted=1
+[HeurSol] name=local_mip dispatch=2 worker=0 effort_at=106651 obj=5561 accepted=1
+[HeurSol] name=local_mip dispatch=2 worker=0 effort_at=122471 obj=5272 accepted=1
+[HeurSol] name=local_mip dispatch=2 worker=0 effort_at=138240 obj=4985 accepted=1
+[HeurSol] name=local_mip dispatch=2 worker=0 effort_at=153958 obj=4664 accepted=1
+[HeurSol] name=local_mip dispatch=2 worker=0 effort_at=169625 obj=4392 accepted=1
+[HeurSol] name=local_mip dispatch=2 worker=0 effort_at=185241 obj=4079 accepted=1
+[HeurSol] name=local_mip dispatch=2 worker=0 effort_at=200806 obj=3774 accepted=1
+[HeurSol] name=local_mip dispatch=2 worker=0 effort_at=216320 obj=3528 accepted=1
+[HeurSol] name=local_mip dispatch=2 worker=0 effort_at=231783 obj=3227 accepted=1
+[HeurSol] name=local_mip dispatch=2 worker=0 effort_at=247195 obj=2956 accepted=1
+[HeurSol] name=local_mip dispatch=2 worker=0 effort_at=262556 obj=2752 accepted=1
+[HeurSol] name=local_mip dispatch=2 worker=0 effort_at=277866 obj=2510 accepted=1
+[HeurSol] name=local_mip dispatch=2 worker=0 effort_at=4762844 obj=1394.0822488826591 accepted=1
+[HeurSol] name=local_mip dispatch=2 worker=0 effort_at=4777990 obj=1135.0822488826591 accepted=1
+[HeurSol] name=local_mip dispatch=2 worker=0 effort_at=4792999 obj=921.08224888265909 accepted=1
+[HeurSol] name=local_mip dispatch=2 worker=0 effort_at=9450854 obj=-2380.292020289206 accepted=1
+[HeurSol] name=local_mip dispatch=2 worker=0 effort_at=14104820 obj=-2061.9043099218175 accepted=1
+[Sequential] heur=local_mip effort=15561172
+final obj=-8674.3426071170288 status=Optimal

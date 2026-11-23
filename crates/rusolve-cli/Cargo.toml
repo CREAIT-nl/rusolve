@@ -1,0 +1,41 @@
+[package]
+name = "rusolve-cli"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "rusolve command line and MCP server (binary: rusolve-cli; the Python wheel exposes it as `rusolve`)"
+# Installed from git or a path (`cargo install --git <repo> rusolve-cli --locked`); the
+# workspace crates are path dependencies, so a crates.io upload is not set up.
+publish = false
+
+# The library target is the crate root `src/main.rs`; `src/bin_main.rs` is the executable
+# (the Python bindings call the diagnostic cores through `rusolve_cli::api`).
+[lib]
+name = "rusolve_cli"
+path = "src/main.rs"
+
+[[bin]]
+name = "rusolve-cli"
+path = "src/bin_main.rs"
+
+[dependencies]
+rusolve-core.workspace = true
+rusolve-io.workspace = true
+rusolve-lp.workspace = true
+rusolve-mip.workspace = true
+rusolve-ekk.workspace = true
+# the Wasm hook sandbox (--wasm-hook, docs/design/wasm-hooks.md)
+rusolve-wasm.workspace = true
+# the JSON result envelope (crates/rusolve-cli/src/envelope.rs)
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+# input.sha256
+sha2 = "0.10"
+# SOCP / convex QCQP route (Clarabel: Goulart and Chen 2024,
+# arXiv:2405.12762; Apache-2.0, see THIRD_PARTY_NOTICES.md)
+clarabel = "0.11.1"
+
+[dev-dependencies]
+# the envelope tests parse the CLI's stdout and the committed schema
+serde_json = "1"

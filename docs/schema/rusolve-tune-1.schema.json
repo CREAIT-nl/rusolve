@@ -1,0 +1,47 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://rusolve.dev/schema/rusolve-tune-1.schema.json",
+  "title": "rusolve.tune/1",
+  "description": "Output of `rusolve tune <dir|list> --format json`. One object on stdout, progress on stderr. `profile` is a complete rusolve.profile/1 object whose `evidence` holds the held-out comparison, the race (Friedman/Conover test, eliminations, work spent, one entry per racing round in `race.rounds`), every candidate with its state and the round it first appeared in (`evidence.winner_round` names the winner's), and every wrong answer, and `train_instances` (per training instance: the static classify features and the mean cost of every candidate on it, the material an agent proposes `--candidates` from). `rusolve tune --space` prints the searched options as rusolve.tune-space/1. `verdict` is one of baseline_kept, tuned_beats_baseline_on_holdout, holdout_not_confirmed, unconfirmed_no_holdout, rejected_wrong_answer_on_holdout; the profile carries the tuned options only for tuned_beats_baseline_on_holdout.",
+  "type": "object",
+  "required": ["schema_version", "solver", "input", "base", "split", "verdict", "wrong_answers", "profile"],
+  "properties": {
+    "schema_version": { "const": "rusolve.tune/1" },
+    "solver": { "type": "object", "required": ["name", "version"] },
+    "input": { "type": "string" },
+    "base": { "enum": ["default", "recommended"] },
+    "split": {
+      "type": "object",
+      "required": ["train", "holdout", "seeds"],
+      "properties": {
+        "train": { "type": "integer" },
+        "holdout": { "type": "integer" },
+        "seeds": { "type": "integer" }
+      }
+    },
+    "verdict": {
+      "enum": [
+        "baseline_kept",
+        "tuned_beats_baseline_on_holdout",
+        "holdout_not_confirmed",
+        "unconfirmed_no_holdout",
+        "rejected_wrong_answer_on_holdout"
+      ]
+    },
+    "wrong_answers": { "type": "integer" },
+    "iterations": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Racing rounds actually run (irace iterations): 1 for the single race, at most --iterations; fewer when the budget, the blocks or the neighbourhood ran out first."
+    },
+    "cost_metric": {
+      "enum": ["c1_work", "iters_nodes"],
+      "description": "What a run's cost counts: c1_work is stats.work of rusolve.result/1 (deterministic, only attributable when solves do not overlap, so --jobs 1); iters_nodes is lp_iterations + 10 * nodes, used with --jobs > 1 because the work counters are process-wide atomics."
+    },
+    "profile_path": { "type": ["string", "null"] },
+    "profile": {
+      "type": "object",
+      "required": ["schema_version", "base", "options", "evidence", "provenance"]
+    }
+  }
+}

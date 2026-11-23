@@ -1,0 +1,55 @@
+# rusolve highs-oracle W5 hooks (thread-safe hipo_ord emission for the w5/hipo fixtures).
+# Applied with patch -p1 AFTER highs-oracle-w4-hooks.patch; own stamp
+# target/highs-oracle/highs-src.w5.stamp. See README.md / FORMAT.md ("W5 records").
+--- a/highs/ipm/hipo/HighsOracleW4Dump.h
++++ b/highs/ipm/hipo/HighsOracleW4Dump.h
+@@ -7,7 +7,11 @@
+ //
+ //   hipo_ord   FactorHighsSolver.cpp chooseOrdering, inside the lambda
+ //              run_ordering_and_analyse, right after the "Finished %s for %s"
+-//              printInfo (before the failure[i] test)
++//              printInfo (before the failure[i] test); since
++//              highs-oracle-w5-hooks.patch the lambda only buffers the record
++//              per ordering index, and the records are written after the
++//              for_each, in index order, from the calling thread (identical
++//              output at one thread)
+ //   hipo_fact  FactorHighsSolver.cpp setup, right after setParallelAfterSymbolic()
+ //   hipo_iter  Solver.cpp Solver::runIpm, right after each makeStep()
+ //   hipo_end   IpxWrapper.cpp solveHipo, right after
+--- a/highs/ipm/hipo/ipm/FactorHighsSolver.cpp
++++ b/highs/ipm/hipo/ipm/FactorHighsSolver.cpp
+@@ -401,6 +401,12 @@
+ 
+   std::vector<Symbolic> symbolics(k, S);
+ 
++  // rusolve oracle (W5): the hipo_ord record of each ordering, buffered per
++  // index and written after the loop below, in index order, from this thread
++  // (at threads > 1 the orderings run concurrently in the for_each).
++  std::vector<std::vector<Int>> oracle_ord_perm(orderings_to_try.size());
++  std::vector<char> oracle_ord_failure(orderings_to_try.size(), 0);
++
+   auto run_ordering_and_analyse = [&](Int i) {
+     logger_.printInfo("Running %s for %s\n", orderings_to_try[i].c_str(),
+                       nla.c_str());
+@@ -431,8 +437,8 @@
+ 
+     logger_.printInfo("Finished %s for %s\n", orderings_to_try[i].c_str(),
+                       nla.c_str());
+-    highsOracleW4Ord(nla, orderings_to_try[i], n, failure[i] != 0,  // rusolve oracle
+-                     full_ptr, full_rows, permutations[i]);
++    oracle_ord_perm[i] = permutations[i];  // rusolve oracle (W5)
++    oracle_ord_failure[i] = failure[i];
+ 
+     if (failure[i]) {
+       logger_.printInfo("Error with %s for %s\n", orderings_to_try[i].c_str(),
+@@ -460,6 +466,10 @@
+   } else {
+     for (Int i = 0; i < k; ++i) run_ordering_and_analyse(i);
+   }
++  for (Int i = 0; i < static_cast<Int>(orderings_to_try.size()); ++i)
++    highsOracleW4Ord(nla, orderings_to_try[i], n,  // rusolve oracle (W5)
++                     oracle_ord_failure[i] != 0, full_ptr, full_rows,
++                     oracle_ord_perm[i]);
+ 
+   Int num_success = 0;
+   for (bool b : failure) {

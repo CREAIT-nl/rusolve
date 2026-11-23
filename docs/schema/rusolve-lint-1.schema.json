@@ -1,0 +1,62 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://rusolve.dev/schema/rusolve-lint-1.schema.json",
+  "title": "rusolve.lint/1",
+  "description": "Output of `rusolve lint <model.mps> --format json`. One object on stdout; logs go to stderr.",
+  "type": "object",
+  "required": ["schema_version", "input", "rules_run", "min_severity", "summary", "findings"],
+  "properties": {
+    "schema_version": {"const": "rusolve.lint/1"},
+    "input": {
+      "type": "object",
+      "required": ["path", "rows", "columns", "nonzeros", "integer_columns"],
+      "properties": {
+        "path": {"type": "string"},
+        "rows": {"type": "integer", "minimum": 0},
+        "columns": {"type": "integer", "minimum": 0},
+        "nonzeros": {"type": "integer", "minimum": 0},
+        "integer_columns": {"type": "integer", "minimum": 0}
+      }
+    },
+    "rules_run": {"type": "array", "items": {"type": "string"}},
+    "min_severity": {"enum": ["info", "warning", "error"]},
+    "summary": {
+      "description": "Counts of items (not groups) at each severity, after --min-severity.",
+      "type": "object",
+      "required": ["errors", "warnings", "infos"],
+      "properties": {
+        "errors": {"type": "integer", "minimum": 0},
+        "warnings": {"type": "integer", "minimum": 0},
+        "infos": {"type": "integer", "minimum": 0}
+      }
+    },
+    "findings": {
+      "description": "One entry per (rule, severity, message), errors first.",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["rule", "severity", "message", "fix", "count", "items"],
+        "properties": {
+          "rule": {"type": "string"},
+          "severity": {"enum": ["info", "warning", "error"]},
+          "message": {"type": "string"},
+          "fix": {"type": "string"},
+          "count": {"description": "All items found; `items` holds at most --max-items of them, worst first.", "type": "integer", "minimum": 1},
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["rows", "columns", "evidence"],
+              "properties": {
+                "rows": {"type": "array", "items": {"type": "string"}},
+                "columns": {"type": "array", "items": {"type": "string"}},
+                "evidence": {"description": "Numbers behind the finding; infinite values are the strings \"inf\" and \"-inf\".", "type": "object"},
+                "fix": {"description": "A fix specific to this item, when the generic one is not enough.", "type": "string"}
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

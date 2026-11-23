@@ -1,0 +1,74 @@
+log Coefficient ranges:
+log   Matrix  [1e+00, 1e+00]
+log   Cost    [4e+01, 3e+03]
+log   Bound   [1e+00, 1e+00]
+log   RHS     [1e+00, 1e+00]
+log Presolving model
+log 426 rows, 7195 cols, 52121 nonzeros <t>s
+log 342 rows, 6146 cols, 37050 nonzeros <t>s
+log Presolve reductions: rows 342(-84); columns 6146(-1049); nonzeros 37050(-15071) 
+cb nodes=0 lpit=0 db=-inf pb=inf
+log Objective function is integral with scale 1
+sol nodes=0 lpit=0 obj=50121
+log         Nodes      |    B&B Tree     |            Objective Bounds              |  Dynamic Constraints |       Work      
+log Src  Proc. InQueue |  Leaves   Expl. | BestBound       BestSol              Gap |   Cuts   InLp Confl. | LpIters     Time
+cb nodes=0 lpit=1986 db=25877.609267851411 pb=50121
+cb nodes=0 lpit=2041 db=25904.440501933474 pb=50121
+cb nodes=0 lpit=2110 db=25926.061493141202 pb=50121
+cb nodes=0 lpit=2143 db=25932.62294062553 pb=50121
+cb nodes=0 lpit=2169 db=25935.387711667601 pb=50121
+cb nodes=0 lpit=2192 db=25939.283436038852 pb=50121
+cb nodes=0 lpit=2201 db=25940.208138759182 pb=50121
+cb nodes=0 lpit=2233 db=25946.797686842852 pb=50121
+cb nodes=0 lpit=2253 db=25947.423052430688 pb=50121
+cb nodes=0 lpit=2269 db=25948.28390647631 pb=50121
+cb nodes=0 lpit=2298 db=25951.846212448607 pb=50121
+cb nodes=0 lpit=2320 db=25955.20652415284 pb=50121
+cb nodes=0 lpit=2334 db=25957.284363921048 pb=50121
+cb nodes=0 lpit=2344 db=25957.623030079441 pb=50121
+cb nodes=0 lpit=2375 db=25961.039167642855 pb=50121
+cb nodes=0 lpit=2402 db=25962.943219131088 pb=50121
+cb nodes=0 lpit=2422 db=25963.504949666898 pb=50121
+cb nodes=0 lpit=2442 db=25964.36279636875 pb=50121
+cb nodes=0 lpit=2452 db=25964.59735046971 pb=50121
+cb nodes=0 lpit=2497 db=25967.142149973075 pb=50121
+cb nodes=0 lpit=2512 db=25968.059514809844 pb=50121
+cb nodes=0 lpit=2539 db=25970.618035129581 pb=50121
+cb nodes=0 lpit=2557 db=25970.941524112306 pb=50121
+cb nodes=0 lpit=2601 db=25972.675723470653 pb=50121
+cb nodes=0 lpit=2612 db=25972.835350990175 pb=50121
+cb nodes=0 lpit=2613 db=25972.835350990186 pb=50121
+cb nodes=0 lpit=2622 db=25972.883664524899 pb=50121
+cb nodes=0 lpit=2631 db=25973.018908479069 pb=50121
+cb nodes=0 lpit=2637 db=25973.0190168562 pb=50121
+cb nodes=0 lpit=2656 db=25973.106852160119 pb=50121
+cb nodes=0 lpit=2664 db=25973.13689415716 pb=50121
+cb nodes=0 lpit=2675 db=25973.161474578632 pb=50121
+cb nodes=0 lpit=2676 db=25973.161474578676 pb=50121
+sol nodes=0 lpit=2676 obj=26402
+cb nodes=0 lpit=11185 db=25973.161474578676 pb=26402
+cb nodes=0 lpit=11210 db=25973.261930031011 pb=26402
+log Model after restart has 313 rows, 4005 cols (4005 bin., 0 int., 0 impl., 0 cont., 0 dom.fix.), and 22043 nonzeros
+cb nodes=0 lpit=15798 db=25973.261930031047 pb=26402
+cb nodes=5 lpit=74904 db=26010.848008637178 pb=26402
+cb nodes=6 lpit=75323 db=26010.848008637178 pb=26402
+sol nodes=6 lpit=75385 obj=26374.000000000124
+cb nodes=6 lpit=75385 db=26010.848008637178 pb=26374.000000000124
+cb nodes=7 lpit=80936 db=26010.848008637178 pb=26374.000000000124
+cb nodes=8 lpit=93237 db=26010.848008637178 pb=26374.000000000124
+cb nodes=10 lpit=122455 db=26138.832413336273 pb=26374.000000000124
+cb nodes=12 lpit=126166 db=26138.832413336273 pb=26374.000000000124
+cb nodes=14 lpit=126406 db=26138.832413336273 pb=26374.000000000124
+cb nodes=16 lpit=126623 db=26138.832413336273 pb=26374.000000000124
+cb nodes=18 lpit=126806 db=26138.832413336273 pb=26374.000000000124
+cb nodes=20 lpit=126857 db=26138.832413336273 pb=26374.000000000124
+cb nodes=21 lpit=126904 db=26372.089068825913 pb=26374.000000000124
+log Solving report
+log   Status            Optimal
+log   Primal bound      26374
+log   Dual bound        26373
+log   Gap               0.00379% (tolerance: 0.01%)
+log   Solution status   feasible
+log   Nodes             21
+log   LP iterations     126904
+final status=Optimal obj=26374.000000000124 bound=26373 nodes=21 lp_iters=126904
