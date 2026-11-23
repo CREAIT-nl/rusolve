@@ -1614,7 +1614,7 @@ mod tests {
         assert!(jumping.stats.nodes_visited < dfs.stats.nodes_visited);
         assert!(jumping.feasible);
 
-        // The value itself, which `docs/PARAMETERS.md` documents and nothing
+        // The value itself, which mip-heuristics' PARAMETERS.md documents and nothing
         // else checks.
         assert_eq!(K_REPAIR_PROGRESS_THRESHOLD, 10);
 

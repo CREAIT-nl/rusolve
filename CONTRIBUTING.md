@@ -88,9 +88,10 @@ both cases.
   [`contrib-port-function`](docs/skills/contrib-port-function/SKILL.md) skill shows how.
 - **Improvements go behind an option** first, off by default, and become the default only with
   benchmark evidence.
-- **Cite a public source** for every algorithmic idea: a paper, a textbook, public
+- **Cite the source** of every algorithmic idea taken from elsewhere: a paper, a textbook, public
   documentation, or the source of an open-source solver whose license allows reuse. Put the
-  citation in a comment next to the code.
+  citation in a comment next to the code. An original idea needs no citation: explain how it
+  works in the comment, and give the benchmark evidence in the pull request.
 - **Only permissively licensed code** (MIT, BSD, Apache-2.0, or similar) may be translated or
   copied in, with its notice in the file header and in
   [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md). Never copy GPL code or code from

@@ -58,8 +58,7 @@ continuous with the node bounds above.
 seed 2 (28 columns in [0,1], 11 equality rows). With presolve on,
 `rusolve-cli solve` returns `Optimal 107` after 0 iterations: presolve removes
 all 11 rows. With `--no-presolve` it returns `Infeasible`, which HiGHS
-confirms. It still reproduces at e443fac. Details and the proposed fix are in
-`docs/design/mip-requests-to-lp.md` §A1.
+confirms. It still reproduces at e443fac.
 
 **Fixed 2026-10-22 by 60d5395 (G16 phase-2 tie perturbation).** This is the
 only crate commit between the repro binary (e3e0b4f) and master. With the same
@@ -88,8 +87,7 @@ and solves cold):
 Root bound propagation fixes 3 columns (lb == ub). After that, `reoptimize`
 also rejects the unchanged root LP's own exported optimal basis, and
 `solve_with(Some(basis))` needs 15 phase-1 iterations. With the unpropagated
-bounds every re-solve is warm. Details are in
-`docs/design/mip-requests-to-lp.md` §C3.
+bounds every re-solve is warm.
 
 ## jobshop_wideM_s2 node LPs: Optimal with an infeasible x (C4)
 
@@ -101,8 +99,8 @@ captured by a scratch-only hook in `RusolveEngine::solve_from` while running
 are `C<j>`. There are no integer markers.
 
 Check with
-`rusolve-cli solve <file> --csv --no-presolve > x.csv`, then
-`re/diff/feas_check.py <file> x.csv`. The same result appears on the 14d68ec
+`rusolve-cli solve <file> --csv --no-presolve > x.csv`, then check the bound and
+row violations of `x.csv` against `<file>`. The same result appears on the 14d68ec
 binary and with presolve on.
 
 | file | rusolve | worst bound viol | worst row viol | HiGHS 1.15 |
@@ -146,7 +144,7 @@ Baseline run (release, 9a63801):
 The LP-level regression is `dual::tests::c2_warm_reopt_of_market_split_stall_lands_fast`
 (`crates/rusolve-lp/src/dual.rs`): reoptimize of the captured LP+basis must
 land Optimal WARM at the cold objective in < 100 iterations. At 9a63801 it
-returns `IterationLimit` at the 200 cap. Mechanism: `docs/re/c2-warm-dual-stalls.md`.
+returns `IterationLimit` at the 200 cap.
 
 ## warm_stall_pg_cut{0,1,2}: warm reopt after root cut rounds (C7)
 
@@ -161,9 +159,8 @@ format as the market_split repro. Cut rows added since the snapshot are
 already `Basic`.
 
 All three are imported, then dropped at the dual engine's distress rung
-(400 stalled visits) and re-solved cold. Numbers against HiGHS 1.15.1 are
-in docs/design/mip-requests-to-lp.md §C7. Mechanism (traced 2026-10-23): an
-exact 4-visit cycle of flip-batch **farcross** events on boxed columns —
-`docs/re/c7-warm-dual-farcross-cycles.md`. LP-level regression:
+(400 stalled visits) and re-solved cold. Mechanism (traced 2026-10-23): an
+exact 4-visit cycle of flip-batch **farcross** events on boxed columns.
+LP-level regression:
 `dual::tests::c7_warm_reopt_of_pg_cut_rounds_lands_warm`.
 

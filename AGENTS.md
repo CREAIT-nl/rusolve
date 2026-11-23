@@ -51,10 +51,11 @@ If you only want to *use* rusolve to solve a model, read [`llms.txt`](llms.txt) 
   (refactor, performance, cleanup, a new option that is off by default) must pass the parity
   check in [`CONTRIBUTING.md`](CONTRIBUTING.md#parity-check). A change that *is* meant to alter
   them needs benchmark evidence in the pull request.
-- **Cite a public source** for every algorithmic idea: a paper, a textbook, public
+- **Cite the source** of every algorithmic idea taken from elsewhere: a paper, a textbook, public
   documentation, or the source of an open-source solver whose license allows it (HiGHS, SCIP,
-  Clarabel, …). Put the citation in a comment next to the code. If you cannot name a source, do
-  not implement the idea; open an issue instead.
+  Clarabel, …). Put the citation in a comment next to the code. An original idea needs no
+  citation: explain how it works in the comment, and give the benchmark evidence in the pull
+  request.
 - **Only permissively licensed code** may be translated or copied in (MIT, BSD, Apache-2.0, or
   similar), with its notice in the file header and in `THIRD_PARTY_NOTICES.md`. Never copy from
   GPL code or from proprietary software.

@@ -16,7 +16,7 @@ the parity check output (IDENTICAL 20 of 20). For changes that should, before-an
 
 - [ ] `cargo fmt --all --check`, clippy with `-D warnings`, and the tests in CONTRIBUTING.md pass
 - [ ] Generated docs regenerated if options, commands or skills changed (`tools/gen_agent_docs.py`, `tools/gen_codemap.py`)
-- [ ] New algorithmic ideas cite a public source in a code comment
+- [ ] Ideas taken from elsewhere cite their source in a code comment; original ones explain how they work
 - [ ] Code taken from other projects is permissively licensed and listed in `THIRD_PARTY_NOTICES.md`
 - [ ] I license this contribution as described in [CONTRIBUTING.md](https://github.com/CREAIT-nl/rusolve/blob/main/CONTRIBUTING.md#license) (Apache-2.0 to the maintainers)
 - [ ] This pull request was written with AI assistance (tool/model: ____ ) and I have reviewed all of it

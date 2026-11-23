@@ -1,14 +1,13 @@
-# rusolve benchmark corpus manifest — read by re/bench/setup_corpus.py.
+# rusolve benchmark corpus manifest.
 #
-# Provenance and pins: see docs/re/bench-corpus-expansion.md and
-# benches/data/ATTRIBUTION.md. Materialized instances land in
+# Provenance and pins: see benches/data/ATTRIBUTION.md. Materialized instances land in
 # benches/data/{lpopt,mip50}/ (gitignored): fetch, never commit.
 #
 # Schema (one [[instance]] per row):
 #   tier     = "lpopt" | "mip50"
 #   name     = instance name; materialized as benches/data/<tier>/<name>.mps
 #   group    = structural group (mip50 families / lpopt hard set), used as the
-#              family column by re/diff/mip_perf.py --tier mip50
+#              family column in per-family benchmark reports
 #   format   = "mps-bz2"  plain MPS in a .bz2        -> bz2-decode
 #              "mpc-bz2"  netlib MPC (compressed MPS) in a .bz2 -> bz2 | emps
 #              "mps-gz"   plain MPS in a .gz          -> gunzip

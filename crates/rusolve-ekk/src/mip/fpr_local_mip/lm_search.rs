@@ -581,7 +581,7 @@ fn infeasible_step_inner(
     // `sample_idxs(..., m_bms_con, ...)` and `sample_op(m_bms_op, ...)`).
     // The same applies to the analogous caps in the satisfied-constraint
     // and boolean-flip phases below.  Reference-faithful, not
-    // paper-faithful; see docs/PARAMETERS.md `kBmsConstraints`.
+    // paper-faithful; see mip-heuristics' PARAMETERS.md `kBmsConstraints`.
     let num_to_sample = cpp_min(kBmsConstraints * 3, ctx.violated.size());
     let num_to_keep = cpp_min(kBmsConstraints, ctx.violated.size());
 
