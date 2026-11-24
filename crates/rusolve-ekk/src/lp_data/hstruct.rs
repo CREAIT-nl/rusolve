@@ -84,6 +84,15 @@ pub struct HighsBasis {
     pub debug_origin_name: String,
     pub col_status: Vec<HighsBasisStatus>,
     pub row_status: Vec<HighsBasisStatus>,
+    /// Not in HiGHS (lever `mip_lp_keep_dse_weights` = 2, simplex/ekk/dse_keep.rs): the dual
+    /// steepest-edge weights by variable of the simplex basis this basis was taken from. Only
+    /// `HighsLpRelaxation::storeBasis` sets it; every other basis has `None`.
+    pub dse_weight: Option<std::sync::Arc<Vec<f64>>>,
+    /// Not in HiGHS (lever `mip_node_install_basis`, mip/lp_relaxation/node_basis.rs): the
+    /// identity `[origin, cutpoolindex, index]` of each cut row of the MIP LP relaxation this
+    /// basis was taken from, in row order after the model rows. Only
+    /// `HighsLpRelaxation::storeBasis` sets it; every other basis has `None`.
+    pub row_keys: Option<std::sync::Arc<Vec<[HighsInt; 3]>>>,
 }
 
 impl Default for HighsBasis {
@@ -98,6 +107,8 @@ impl Default for HighsBasis {
             debug_origin_name: "None".to_string(),
             col_status: Default::default(),
             row_status: Default::default(),
+            dse_weight: None,
+            row_keys: None,
         }
     }
 }

@@ -13,7 +13,9 @@
 //! | `convex_qp` | `hipo` or `quass` (as the `qp` block) | QP path | QP path |
 //! | `gc`, `gc_mip` | `gc-linearization` (`gc_solve.rs` + HiGHS port) | gc route | gc route |
 //! | `conic` | `clarabel` (`conic_solve.rs`) | conic route | conic route |
-//! | `nonconvex_qp`, `miqp`, `nonconvex_qcqp`, `mi_conic`, `gc_quadratic` | none | typed error, exit 3 | typed error, exit 3 |
+//! | `miqp` (convex Q, `miqp_oa` on) | `oa` (`miqp_solve.rs` + HiGHS port) | mip path | mip path |
+//! | `mi_conic` (SOC / rotated SOC / convex quadratic rows, `misocp_oa` on) | `oa` (`misocp_solve.rs` + HiGHS port) | oa route | oa route |
+//! | `nonconvex_qp`, `miqp` (otherwise), `nonconvex_qcqp`, `mi_conic` (otherwise), `gc_quadratic` | none | typed error, exit 3 | typed error, exit 3 |
 //!
 //! `rusolve classify --format json` reports the same class name.
 
@@ -39,6 +41,11 @@ pub enum Class {
     GcMip,
     /// A general constraint together with a quadratic objective, row or cone.
     GcQuadratic,
+    /// Intervals, no-overlap, cumulative, all-different, element or table objects (no file format
+    /// carries them; the Python API and the MCP `build_model` tool do).
+    Cp,
+    /// CP objects together with a quadratic term or a general constraint.
+    CpMixed,
 }
 
 impl Class {
@@ -55,6 +62,8 @@ impl Class {
             Class::Gc => "gc",
             Class::GcMip => "gc_mip",
             Class::GcQuadratic => "gc_quadratic",
+            Class::Cp => "cp",
+            Class::CpMixed => "cp_mixed",
         }
     }
 
@@ -65,6 +74,7 @@ impl Class {
             Class::ConvexQp => Some("hipo"),
             Class::Conic => Some("clarabel"),
             Class::Gc | Class::GcMip => Some("gc-linearization"),
+            Class::Cp => Some(crate::cp_solve::ENGINE_LINEARIZATION),
             _ => None,
         }
     }
@@ -86,6 +96,8 @@ pub struct Verdict {
     /// The QP front's own typed error (`error` object of `rusolve.error/1`: eigenvalue, variables),
     /// kept for a nonconvex Q and a MIQP so the refusal says as much as it did before the router.
     pub detail: Option<Value>,
+    /// `Miqp` whose Q is convex (the outer-approximation route can take it).
+    pub convex_miqp: bool,
 }
 
 /// The class of a model that has been read. `Lp` / `Mip` mean "the legacy paths".
@@ -98,7 +110,19 @@ pub fn classify_model(m: &Model) -> Verdict {
         class,
         reason,
         detail: None,
+        convex_miqp: false,
     };
+    if !m.cp.is_empty() {
+        if gc || q_obj || conic {
+            return v(
+                Class::CpMixed,
+                "the model has scheduling or combinatorial (CP) objects together with general \
+                 constraints or quadratic terms; no engine handles that combination"
+                    .into(),
+            );
+        }
+        return v(Class::Cp, String::new());
+    }
     if gc && (q_obj || conic) {
         let what =
             m.gc.first_general()
@@ -146,6 +170,7 @@ pub fn classify_model(m: &Model) -> Verdict {
                     class,
                     reason: r.message,
                     detail: r.json.get("error").cloned(),
+                    convex_miqp: class == Class::Miqp && crate::qp::assess_miqp(m).is_ok(),
                 }
             }
         };
@@ -166,6 +191,44 @@ pub fn note(class: Class) {
     let _ = ROUTE.set((class, class.engine()));
 }
 
+/// [`note`] with an engine the class has only when a lever is on (`oa` for a convex MIQP).
+pub fn note_engine(class: Class, engine: &'static str) {
+    let _ = ROUTE.set((class, Some(engine)));
+}
+
+/// True when the router sent a convex MIQP to the outer-approximation engine.
+pub fn oa_requested() -> bool {
+    matches!(ROUTE.get(), Some((Class::Miqp, Some("oa"))))
+}
+
+/// `key=value` entries of `RUSOLVE_EKK_OPTS` that name a `miqp_oa*` option, as `--opt` flags:
+/// `solve` has no `--opt`, so the environment is how its user reaches the lever.
+fn oa_env_flags() -> Vec<String> {
+    let mut out = Vec::new();
+    if let Ok(list) = std::env::var("RUSOLVE_EKK_OPTS") {
+        for kv in list.split(',').filter(|s| s.starts_with("miqp_oa")) {
+            out.push("--opt".to_string());
+            out.push(kv.to_string());
+        }
+    }
+    out
+}
+
+/// Whether `miqp_oa` is on: `--opt miqp_oa=true` of `mip`, or `RUSOLVE_EKK_OPTS` for `solve`.
+/// The last setting of the key wins, as for every option.
+pub fn oa_lever(cmd: &str, args: &[String]) -> bool {
+    let on = |kv: &str| matches!(kv, "miqp_oa=true" | "miqp_oa=1");
+    let flags: Vec<String> = if cmd == "mip" {
+        args.to_vec()
+    } else {
+        oa_env_flags()
+    };
+    flags
+        .windows(2)
+        .rfind(|w| w[0] == "--opt" && w[1].starts_with("miqp_oa="))
+        .is_some_and(|w| on(&w[1]))
+}
+
 /// `(class, engine, convexity)` for the envelope. Without a router verdict (a plain LP or MIP,
 /// which is never read by the router) the class comes from the integer count and the engine is
 /// the solver stack that ran it.
@@ -182,7 +245,13 @@ pub fn envelope_fields(
             } else {
                 e.map_or_else(|| stack_engine.to_string(), str::to_string)
             },
-            c.convexity(),
+            // a MIQP reaches an envelope only through the outer-approximation route, which
+            // proved Q convex
+            if *c == Class::Miqp || (*c == Class::MiConic && e.is_some()) {
+                Some("convex")
+            } else {
+                c.convexity()
+            },
         ),
         None => (
             if integer_cols > 0 { "mip" } else { "lp" }.to_string(),
@@ -197,11 +266,37 @@ fn wants_json(args: &[String]) -> bool {
         .any(|w| w[0] == "--format" && w[1] == "json")
 }
 
+/// For a class an experimental engine can take once its lever is on, the sentence that names the
+/// lever. `None` when no lever helps (a nonconvex Q, or any other class).
+pub fn lever_hint(verdict: &Verdict) -> Option<String> {
+    match verdict.class {
+        Class::Miqp if verdict.convex_miqp => Some(
+            "an experimental outer-approximation engine takes convex MIQP: enable it with \
+             `--opt miqp_oa=true` (or RUSOLVE_EKK_OPTS=miqp_oa=true); it is off by default \
+             because it is slower than the engine for linear MIP"
+                .into(),
+        ),
+        Class::MiConic => Some(
+            "an experimental outer-approximation engine takes convex mixed-integer conic models \
+             (second-order and rotated cones, convex quadratic rows): enable it with \
+             `--opt misocp_oa=true` (or RUSOLVE_EKK_OPTS=misocp_oa=true); it is off by default \
+             because it is slower and its bound can stall"
+                .into(),
+        ),
+        _ => None,
+    }
+}
+
 /// The typed error of a class nothing solves: stderr text, and under `--format json` a
 /// `rusolve.error/1` object on stdout. Exit code 3 (input the solver cannot honour).
 pub fn refuse(cmd: &str, args: &[String], verdict: &Verdict) -> ExitCode {
     let c = verdict.class;
-    let message = format!("{} models are not supported: {}", c.name(), verdict.reason);
+    let hint = lever_hint(verdict);
+    let mut message = format!("{} models are not supported: {}", c.name(), verdict.reason);
+    if let Some(h) = &hint {
+        message.push_str("; ");
+        message.push_str(h);
+    }
     eprintln!("rusolve {cmd}: {message}");
     if wants_json(args) {
         let mut err = verdict.detail.clone().unwrap_or_else(|| json!({}));
@@ -212,6 +307,9 @@ pub fn refuse(cmd: &str, args: &[String], verdict: &Verdict) -> ExitCode {
             err["kind"] = json!("unsupported_class");
         }
         err["message"] = json!(message);
+        if let Some(h) = &hint {
+            err["hint"] = json!(h);
+        }
         err["class"] = json!(c.name());
         err["reason"] = json!(verdict.reason);
         if let Some(cv) = c.convexity() {
@@ -301,7 +399,16 @@ pub fn dispatch(cmd: &str, path: &str, args: &[String]) -> Option<ExitCode> {
     if matches!(class, Class::Lp | Class::Mip) {
         return None;
     }
-    note(class);
+    if class == Class::MiConic && crate::misocp_solve::lever_on(&args[1..]) {
+        note_engine(class, "oa");
+        return Some(crate::misocp_solve::run(cmd, args));
+    }
+    let oa = class == Class::Miqp && verdict.convex_miqp && oa_lever(cmd, &args[1..]);
+    if oa {
+        note_engine(class, "oa");
+    } else {
+        note(class);
+    }
     let rest = &args[1..];
     let usage = |e: String| {
         Some(crate::diag::fail_msg(
@@ -311,6 +418,21 @@ pub fn dispatch(cmd: &str, path: &str, args: &[String]) -> Option<ExitCode> {
             format!("rusolve {cmd}: {e}"),
         ))
     };
+    if oa {
+        if cmd == "mip" {
+            // the `mip` path of `run_legacy` reaches `run_mip_highs`, which runs the engine
+            return None;
+        }
+        return match solve_to_mip_flags(rest) {
+            Ok(mut f) => {
+                let mut a = vec![path.to_string()];
+                a.append(&mut f);
+                a.extend(oa_env_flags());
+                Some(crate::mip_highs::run_mip_highs(&a))
+            }
+            Err(e) => usage(e),
+        };
+    }
     match class {
         Class::Conic => Some(crate::conic_solve::run(cmd, args)),
         Class::ConvexQp => {

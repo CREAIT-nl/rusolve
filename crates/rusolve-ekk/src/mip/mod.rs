@@ -198,6 +198,8 @@ pub mod mip_worker;
 pub mod modk_separator;
 pub mod netdesign_separator;
 pub mod node_queue;
+pub mod node_rounding;
+pub mod oa;
 pub mod objective_function;
 pub mod path_separator;
 pub mod primal_heuristics;

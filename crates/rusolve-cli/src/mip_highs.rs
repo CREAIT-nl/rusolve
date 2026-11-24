@@ -362,13 +362,44 @@ pub fn run_mip_highs(args: &[String]) -> ExitCode {
             );
         }
     };
+    // A convex MIQP the router sent to the outer-approximation engine (`miqp_oa` on): the
+    // epigraph columns are appended to `lp` here and the search below is replaced by
+    // `miqp_solve::run`. Anything else with a Hessian is refused, as before.
+    let mut oa_plan: Option<crate::miqp_solve::OaPlan> = None;
     if has_hessian {
-        return crate::diag::fail_msg(
-            json,
-            "RS0012",
-            3,
-            format!("rusolve mip: {}", crate::qp::unsupported("mip")),
-        );
+        if !crate::route::oa_requested() {
+            return crate::diag::fail_msg(
+                json,
+                "RS0012",
+                3,
+                format!("rusolve mip: {}", crate::qp::unsupported("mip")),
+            );
+        }
+        if start_file.is_some() || basis_file.is_some() || add_rows_file.is_some() {
+            return crate::diag::fail_msg(
+                json,
+                "RS0003",
+                2,
+                "rusolve mip: --start, --basis and --add-rows are not supported with miqp_oa (the model gains epigraph columns)",
+            );
+        }
+        let flag = |key: &str, default: bool| {
+            settings
+                .iter()
+                .rfind(|(k, _)| k == key)
+                .map_or(default, |(_, v)| matches!(v.as_str(), "true" | "1"))
+        };
+        match crate::miqp_solve::prepare(
+            path,
+            &mut lp,
+            flag("miqp_oa_disaggregate", false),
+            !flag("miqp_oa_lazy_only", false),
+        ) {
+            Ok(plan) => oa_plan = Some(plan),
+            Err(e) => {
+                return crate::diag::fail_msg(json, "RS0012", 3, format!("rusolve mip: {e}"));
+            }
+        }
     }
     // A model with general constraints is linearized here; one without
     // keeps the port's path untouched.
@@ -465,6 +496,34 @@ pub fn run_mip_highs(args: &[String]) -> ExitCode {
                 "RS0004",
                 2,
                 format!("rusolve mip: unknown option or invalid value: {key}={value}"),
+            );
+        }
+    }
+    // `mip_engine=cpsat` (docs/design/cpsat-engine.md): the solve below is replaced by CP-SAT.
+    // Everything that steers or reads the port's search is refused rather than ignored.
+    let cpsat = match crate::cpsat_solve::selected(&highs) {
+        Ok(on) => on,
+        Err(msg) => {
+            return crate::diag::fail_msg(json, "RS0004", 2, format!("rusolve mip: {msg}"));
+        }
+    };
+    if cpsat {
+        let unsupported = [
+            (start_file.is_some(), "--start"),
+            (basis_file.is_some(), "--basis"),
+            (add_rows_file.is_some(), "--add-rows"),
+            (wasm_hook.is_some(), "--wasm-hook"),
+            (watchdog, "--watchdog"),
+            (jsonl, "--log-format jsonl"),
+            (oa_plan.is_some(), "miqp_oa"),
+            (gc_plan.is_some(), "general constraints"),
+        ];
+        if let Some((_, what)) = unsupported.iter().find(|(on, _)| *on) {
+            return crate::diag::fail_msg(
+                json,
+                "RS0003",
+                2,
+                format!("rusolve mip: {what} is not supported with mip_engine=cpsat"),
             );
         }
     }
@@ -741,12 +800,45 @@ pub fn run_mip_highs(args: &[String]) -> ExitCode {
             }),
         );
     }
+    let mut oa_out: Option<rusolve_ekk::mip::oa::OaOutcome> = None;
+    let mut cpsat_report: Option<serde_json::Value> = None;
     let run_status = if pass_status == HighsStatus::kError {
         HighsStatus::kError
     } else {
         // `--threads N` starts an N-worker scheduler for this run
         highs.reset_scheduler_for_threads();
-        highs.run()
+        if cpsat {
+            match crate::cpsat_solve::run(&mut highs, path) {
+                Ok(report) => {
+                    cpsat_report = Some(report);
+                    HighsStatus::kOk
+                }
+                Err(f) => {
+                    let code = if f.exit() == 4 { "RS0090" } else { "RS0012" };
+                    return crate::diag::fail_msg(
+                        json,
+                        code,
+                        f.exit(),
+                        format!("rusolve mip: {}", f.message()),
+                    );
+                }
+            }
+        } else {
+            match oa_plan.as_mut() {
+                Some(plan) => {
+                    let out = crate::miqp_solve::run(plan, &mut highs);
+                    let st = out.status;
+                    oa_out = Some(out);
+                    st
+                }
+                None => highs.run(),
+            }
+        }
+    };
+    // The exact objective, the honest status and the solution cut to the user's columns
+    let oa_json = match (&oa_plan, &oa_out) {
+        (Some(p), Some(o)) => Some(crate::miqp_solve::finish(p, &mut highs, o)),
+        _ => None,
     };
     // Check the user's objects, repair trickle flow once, cut the solution
     let gc_outcome = gc_plan.as_ref().map(|plan| {
@@ -794,6 +886,7 @@ pub fn run_mip_highs(args: &[String]) -> ExitCode {
         // the infeasible set and the ray need the linearized model (it carries the general
         // constraints); the violation check needs the user's rows
         match &gc_plan {
+            _ if oa_plan.is_some() => oa_plan.as_ref().map_or(&highs.model_lp_, |p| &p.user_lp),
             Some(p)
                 if !matches!(
                     status,
@@ -815,7 +908,11 @@ pub fn run_mip_highs(args: &[String]) -> ExitCode {
     diags.extend(post);
     let solved = crate::envelope::Solved {
         path,
-        lp: gc_plan.as_ref().map_or(&highs.model_lp_, |p| &p.user_lp),
+        lp: match (&gc_plan, &oa_plan) {
+            (Some(p), _) => &p.user_lp,
+            (None, Some(p)) => &p.user_lp,
+            (None, None) => &highs.model_lp_,
+        },
         status,
         run_status,
         info,
@@ -855,6 +952,13 @@ pub fn run_mip_highs(args: &[String]) -> ExitCode {
     }
     if let Some(o) = &gc_outcome {
         extras.push(("general_constraints", o.report.clone()));
+    }
+    if let Some(r) = &oa_json {
+        extras.push(("miqp_oa", r.clone()));
+    }
+    if let Some(r) = &cpsat_report {
+        extras.push(("engine", serde_json::json!(crate::cpsat_solve::ENGINE)));
+        extras.push(("cpsat", r.clone()));
     }
     if let Some(b) = basis_report {
         extras.push(("basis", b));

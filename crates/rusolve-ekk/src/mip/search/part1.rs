@@ -8,6 +8,90 @@ use crate::mip::symmetry_dynamic::hook::{s3_child_path, s3_propagate};
 use crate::prelude::*;
 use std::sync::Arc;
 
+/// rusolve `mip_child_selection`: the option value (0..8) as HiGHS's child selection rule
+/// (`HighsSearch::ChildSelectionRule`, HiGHS 1.16 `mip/HighsSearch.h`). HiGHS itself uses
+/// kRootSol in the main search and kHybridInferenceCost in sub-MIPs; this lets the main
+/// search use any of the rules HiGHS already implements. -1 (default) keeps HiGHS.
+fn child_selection_rule(v: HighsInt) -> HighsSearch_ChildSelectionRule {
+    use HighsSearch_ChildSelectionRule::*;
+    match v {
+        0 => kUp,
+        1 => kDown,
+        2 => kRootSol,
+        3 => kObj,
+        4 => kRandom,
+        5 => kBestCost,
+        6 => kWorstCost,
+        7 => kDisjunction,
+        _ => kHybridInferenceCost,
+    }
+}
+
+impl HighsSearch {
+    /// rusolve `mip_child_selection_switch_gap`: the child rule for this branching. With
+    /// `mip_child_selection` set (main search only), the chosen rule (for example the hybrid
+    /// inference/cost rule, which finds incumbents sooner) is used while the relative primal-dual
+    /// gap of `limitsToGap` is above the threshold; at or below it the search goes back to the
+    /// HiGHS root-solution rule, which closes trees faster once a good incumbent is known. This
+    /// split is our own; the evidence is in the pull request. 0 = never switch (the rule stays).
+    pub(crate) fn effective_child_rule(
+        &self,
+        ms: &HighsMipSolver,
+    ) -> HighsSearch_ChildSelectionRule {
+        let sw = ms.options_mip_.mip_child_selection_switch_gap;
+        if sw > 0.0 && !ms.submip && !self.inheuristic && ms.options_mip_.mip_child_selection >= 0 {
+            let (mut lb, mut ub) = (0.0, 0.0);
+            let gap = ms.limits_to_gap(
+                ms.mipdata_.lower_bound,
+                ms.mipdata_.upper_bound,
+                &mut lb,
+                &mut ub,
+            );
+            if gap <= sw {
+                return HighsSearch_ChildSelectionRule::kRootSol;
+            }
+        }
+        self.childselrule
+    }
+
+    /// rusolve `mip_plunge_quot`: the largest node lower bound the search still plunges into, or
+    /// +inf when the rule is off. Plunging (diving into a child, or backtracking to a sibling on
+    /// the node stack) continues only while the node's lower bound is at most
+    /// `lb + quot * (cutoff - lb)`, with `lb` the global lower bound and `cutoff` the upper limit;
+    /// a node above it goes to the queue, where best-bound and best-estimate picks take over.
+    /// This is the `maxplungequot` rule of SCIP's best-first and hybrid best-estimate node
+    /// selectors (SCIP, Apache-2.0: `src/scip/nodesel_bfs.c`, `src/scip/nodesel_hybridestim.c`;
+    /// Achterberg, "Constraint Integer Programming", PhD thesis, TU Berlin 2007, ch. 6), applied
+    /// only when [`plunge_levers_active`] says so.
+    pub(crate) fn plunge_max_bound(&self, ms: &HighsMipSolver) -> f64 {
+        let quot = ms.options_mip_.mip_plunge_quot;
+        if quot <= 0.0 || !plunge_levers_active(ms, self.inheuristic) {
+            return kHighsInf;
+        }
+        let lb = ms.mipdata_.lower_bound;
+        lb + quot * (ms.mipdata_.upper_limit - lb)
+    }
+}
+
+/// rusolve `mip_plunge_gap`: whether the plunge levers (`mip_plunge_quot`,
+/// `mip_plunge_max_nodes`, `mip_plunge_bestbound_freq`) act now. They act in the main search
+/// (not in sub-MIPs or heuristic dives) once the upper limit is finite and the relative gap between the global lower bound and the upper
+/// limit (the incumbent cutoff, or `objective_bound`) is at or below `mip_plunge_gap`. Before
+/// that, deep plunging finds incumbents; after it, picking low-bound nodes more often raises the
+/// reported dual bound. 0 = off: the HiGHS plunge.
+pub(crate) fn plunge_levers_active(ms: &HighsMipSolver, inheuristic: bool) -> bool {
+    let max_gap = ms.options_mip_.mip_plunge_gap;
+    if max_gap <= 0.0 || ms.submip || inheuristic {
+        return false;
+    }
+    let ul = ms.mipdata_.upper_limit;
+    if ul == kHighsInf {
+        return false;
+    }
+    let (mut lb, mut ub) = (0.0, 0.0);
+    ms.limits_to_gap(ms.mipdata_.lower_bound, ul, &mut lb, &mut ub) <= max_gap
+}
+
 /// C++ `std::pair<A, B>` `operator<` (libc++): `p.first < q.first || (!(q.first < p.first) && p.second < q.second)`.
 /// `>` and `>=` are written as `std_pair_lt` with the operands swapped or negated.
 fn std_pair_lt<A: PartialOrd, B: PartialOrd>(p: (A, B), q: (A, B)) -> bool {
@@ -570,6 +654,9 @@ impl HighsSearch {
             count_tree_weight: true,
             childselrule: if ms.submip {
                 HighsSearch_ChildSelectionRule::kHybridInferenceCost
+            } else if ms.options_mip_.mip_child_selection >= 0 {
+                // rusolve mip_child_selection: one of HiGHS's own rules for the main search
+                child_selection_rule(ms.options_mip_.mip_child_selection)
             } else {
                 HighsSearch_ChildSelectionRule::kRootSol
             },
@@ -578,6 +665,7 @@ impl HighsSearch {
             stabilizer_orbit_workspace: StabilizerOrbitWorkspace::default(),
             reliableatnode: HighsHashTable::default(),
             s3_stats: crate::mip::symmetry_dynamic::S3Stats::default(),
+            plunge_bound_stop: false,
         };
         // the infeasibility flag is overwritten and lost when setDomainChangeStack is
         // called. therefore, assert that localdom is not infeasible here.
@@ -1146,15 +1234,22 @@ impl HighsSearch {
             let estimate = self.get_current_estimate();
             let depth = self.get_current_depth();
             // mip_symmetry_dynamic: carry s3_path through the node queue
-            let tmp_treeweight = if flag {
-                let s3_path = self.nodestack.last().unwrap().s3_path.clone();
-                ctx.node_queue(nodequeue).emplace_node_s3(
+            // mip_node_install_basis: and the parent basis
+            let basis = self.queued_node_basis(ctx);
+            let tmp_treeweight = if flag || basis.is_some() {
+                let s3_path = if flag {
+                    self.nodestack.last().unwrap().s3_path.clone()
+                } else {
+                    None
+                };
+                ctx.node_queue(nodequeue).emplace_node_ext(
                     domchg_stack,
                     branch_positions,
                     lower_bound,
                     estimate,
                     depth,
                     s3_path,
+                    basis,
                 )
             } else {
                 ctx.node_queue(nodequeue).emplace_node(
@@ -1190,9 +1285,16 @@ impl HighsSearch {
         }
 
         // get the basis of the node highest up in the tree
+        // (mip_node_install_basis: the node keeps it, so that its queued children carry it)
+        let keep_basis = ctx.ms.options_mip_.mip_node_install_basis;
         let mut basis: Option<Arc<HighsBasis>> = None;
         for node_data in self.nodestack.iter_mut() {
-            if let Some(b) = node_data.node_basis.take() {
+            let b = if keep_basis {
+                node_data.node_basis.clone()
+            } else {
+                node_data.node_basis.take()
+            };
+            if let Some(b) = b {
                 basis = Some(b);
                 break;
             }
@@ -1238,6 +1340,7 @@ impl HighsSearch {
         let mut node =
             HighsNodeQueue_OpenNode::new_2(domchg_stack, branch_positions, lb, estimate, depth);
         node.s3_path = s3_path;
+        node.basis = self.queued_node_basis(ctx);
         let count_tree_weight = self.count_tree_weight;
         ctx.ms.mipdata_.workers[ctx.worker]
             .processed_nodes
@@ -1299,9 +1402,16 @@ impl HighsSearch {
         }
 
         // get the basis of the node highest up in the tree
+        // (mip_node_install_basis: the node keeps it, so that its queued children carry it)
+        let keep_basis = ctx.ms.options_mip_.mip_node_install_basis;
         let mut basis: Option<Arc<HighsBasis>> = None;
         for node_data in self.nodestack.iter_mut() {
-            if let Some(b) = node_data.node_basis.take() {
+            let b = if keep_basis {
+                node_data.node_basis.clone()
+            } else {
+                node_data.node_basis.take()
+            };
+            if let Some(b) = b {
                 basis = Some(b);
                 break;
             }
@@ -1422,6 +1532,25 @@ impl HighsSearch {
         }
     }
 
+    /// rusolve mip_node_install_basis: the basis a node sent to the queue now carries, the one
+    /// stored with the top of the node stack (the node's own basis once its LP is solved, its
+    /// parent's before). None when the flag is off, or when the open nodes would hold more
+    /// than `NODE_BASIS_QUEUE_BUDGET` basis statuses if each had its own basis (siblings share
+    /// one, so the real use is lower).
+    pub(crate) fn queued_node_basis(&self, ctx: &SearchCtx<'_>) -> Option<Arc<HighsBasis>> {
+        const NODE_BASIS_QUEUE_BUDGET: usize = 1 << 27;
+        if !ctx.ms.options_mip_.mip_node_install_basis {
+            return None;
+        }
+        let basis = self.nodestack.last()?.node_basis.as_ref()?;
+        let size = basis.col_status.len() + basis.row_status.len();
+        let queued = ctx.ms.mipdata_.nodequeue.num_nodes() as usize + 1;
+        if queued.saturating_mul(size) > NODE_BASIS_QUEUE_BUDGET {
+            return None;
+        }
+        Some(basis.clone())
+    }
+
     /// HiGHS: HighsSearch.cpp::HighsSearch::installNode (lines 848-872)
     /// C++: `void installNode(HighsNodeQueue::OpenNode && node)`
     pub fn install_node(&mut self, ctx: &mut SearchCtx<'_>, node: HighsNodeQueue_OpenNode) {
@@ -1463,6 +1592,11 @@ impl HighsSearch {
         // mip_symmetry_dynamic: carry s3_path from the queued node
         if flag {
             self.nodestack.last_mut().unwrap().s3_path = node.s3_path_handle();
+        }
+        // rusolve mip_node_install_basis: start the node's LP from its parent's basis
+        // (lp_relaxation/node_basis.rs); HiGHS keeps the basis the LP holds.
+        if let Some(basis) = node.basis.as_deref() {
+            ctx.lp.restore_node_basis(basis);
         }
         self.subrootsol.clear();
         self.depthoffset = node.depth - 1;
@@ -1893,6 +2027,8 @@ mod s3_gate1_tests {
         options.mip_heuristic_run_root_reduced_cost = false;
         options.mip_heuristic_run_zi_round = false;
         options.mip_heuristic_run_shifting = false;
+        // The HiGHS child rule: the pinned node counts below are the HiGHS path.
+        options.mip_child_selection = -1;
         options
     }
 

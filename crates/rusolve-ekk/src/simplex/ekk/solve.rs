@@ -129,6 +129,7 @@ impl HEkk {
             }
             let mut dual_solver = HEkkDual::new(self);
             call_status = dual_solver.solve(self, force_phase2);
+            dual_solver.recycle(self);
             debug_assert!(self.called_return_from_solve_);
             return_status = interpret_call_status(
                 &self.options_.log_options,
@@ -349,6 +350,11 @@ impl HEkk {
 
     /// HiGHS: HEkk.cpp::HEkk::deleteRows (lines 1296-1298, 3 lines)
     pub fn delete_rows(&mut self, index_collection: &HighsIndexCollection) {
+        // rusolve lever `mip_lp_keep_dse_weights` (not in HiGHS, dse_keep.rs).
+        if self.options_.mip_lp_keep_dse_weights > 0 {
+            self.dse_keep_save();
+            self.dse_keep_delete_rows(index_collection);
+        }
         self.update_status(LpAction::kDelRows);
     }
 

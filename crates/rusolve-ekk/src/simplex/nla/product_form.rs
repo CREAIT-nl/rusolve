@@ -103,6 +103,7 @@ impl ProductFormUpdate {
         // list. If RHS fill-in occurs in a row, then we have to add it to
         // the list. We're not tracking cancellation, so we don't need to
         // know where a row appears in the list
+        rhs.work_buffers();
         for i_x in 0..rhs.count {
             let r = rhs.index[i_x as usize];
             rhs.cwork[r as usize] = 1;

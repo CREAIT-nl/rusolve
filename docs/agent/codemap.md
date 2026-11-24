@@ -7,7 +7,7 @@ Where each HiGHS source file lives in the Rust port, and which files read each o
 - Rust files with a `//! HiGHS source:` header: **468**
 - distinct HiGHS source files named: **485**
 - header-to-Rust mappings below: **705**
-- HiGHS options (fields of `HighsOptions`): **321**
+- HiGHS options (fields of `HighsOptions`): **345**
 
 ## HiGHS file to Rust file
 
@@ -430,7 +430,7 @@ A header that names a directory or no single file (crate roots, `mod.rs`) appear
 | `mip/HighsMipSolverData.cpp` | `crates/rusolve-ekk/src/mip/mip_solver_data/part1.rs` |  |
 | `mip/HighsMipSolverData.cpp` | `crates/rusolve-ekk/src/mip/mip_solver_data/part2.rs` | `convert_to_print_string`, `convert_to_print_string_2` |
 | `mip/HighsMipSolverData.cpp` | `crates/rusolve-ekk/src/mip/mip_solver_data/part3.rs` | `clock_off`, `poss_inf_rel_diff` |
-| `mip/HighsMipSolverData.h` | `crates/rusolve-ekk/src/mip/mip_solver_data/mod.rs` | `HighsPrimaDualIntegral`, `H16WorkerLpIterationsStop`, `HighsMipSolverData`, `HighsMipSolverData_SymmetryDetectionData`, `HighsMipTaskGroup` (+30) |
+| `mip/HighsMipSolverData.h` | `crates/rusolve-ekk/src/mip/mip_solver_data/mod.rs` | `HighsPrimaDualIntegral`, `H16WorkerLpIterationsStop`, `HighsMipSolverData`, `HighsMipSolverData_SymmetryDetectionData`, `HighsMipTaskGroup` (+31) |
 | `mip/HighsMipWorker.cpp` | `crates/rusolve-ekk/src/mip/mip_worker.rs` | `HighsMipWorker`, `HighsMipWorker_SepaStatistics`, `HighsMipWorker_HeurStatistics` |
 | `mip/HighsMipWorker.h` | `crates/rusolve-ekk/src/mip/mip_worker.rs` | `HighsMipWorker`, `HighsMipWorker_SepaStatistics`, `HighsMipWorker_HeurStatistics` |
 | `mip/HighsModkSeparator.cpp` | `crates/rusolve-ekk/src/mip/modk_separator.rs` | `HighsModkSeparator`, `separate_mod_k_cuts` |
@@ -689,9 +689,9 @@ A header that names a directory or no single file (crate roots, `mod.rs`) appear
 | `util/HFactorUtils.cpp` | `crates/rusolve-ekk/src/util/hfactor/utils.rs` |  |
 | `util/HSet.cpp` | `crates/rusolve-ekk/src/util/hset.rs` | `HSet` |
 | `util/HSet.h` | `crates/rusolve-ekk/src/util/hset.rs` | `HSet` |
-| `util/HVector.h` | `crates/rusolve-ekk/src/util/hvector.rs` | `HVector`, `HVectorNext`, `HVectorPtr` |
-| `util/HVectorBase.cpp` | `crates/rusolve-ekk/src/util/hvector.rs` | `HVector`, `HVectorNext`, `HVectorPtr` |
-| `util/HVectorBase.h` | `crates/rusolve-ekk/src/util/hvector.rs` | `HVector`, `HVectorNext`, `HVectorPtr` |
+| `util/HVector.h` | `crates/rusolve-ekk/src/util/hvector.rs` | `HVector`, `HVectorNext`, `HVectorPool`, `HVectorPtr` |
+| `util/HVectorBase.cpp` | `crates/rusolve-ekk/src/util/hvector.rs` | `HVector`, `HVectorNext`, `HVectorPool`, `HVectorPtr` |
+| `util/HVectorBase.h` | `crates/rusolve-ekk/src/util/hvector.rs` | `HVector`, `HVectorNext`, `HVectorPool`, `HVectorPtr` |
 | `util/HighsCDouble.h` | `crates/rusolve-ekk/src/util/highs_cdouble.rs` | `HighsCDouble`, `ldexp_f64` |
 | `util/HighsComponent.h` | `crates/rusolve-ekk/src/presolve/presolve_component.rs` | `PresolveComponentData`, `PresolveComponentInfo`, `PresolveComponent` |
 | `util/HighsDataStack.h` | `crates/rusolve-ekk/src/util/highs_data_stack.rs` | `HighsDataStack`, `HighsDataStackItem` |
@@ -727,17 +727,17 @@ An option is read where its field is accessed (`<expr>.<option>`) outside the op
 
 | option | read in |
 |---|---|
-| `time_limit` | `crates/rusolve-cli/src/api.rs`, `crates/rusolve-cli/src/conic_solve.rs`, `crates/rusolve-cli/src/diagnose.rs`, `crates/rusolve-cli/src/ekk.rs`, `crates/rusolve-cli/src/envelope.rs`, `crates/rusolve-cli/src/explain_mip.rs` (+53 more) |
+| `time_limit` | `crates/rusolve-cli/src/api.rs`, `crates/rusolve-cli/src/conic_solve.rs`, `crates/rusolve-cli/src/cpsat_solve.rs`, `crates/rusolve-cli/src/diagnose.rs`, `crates/rusolve-cli/src/ekk.rs`, `crates/rusolve-cli/src/envelope.rs` (+58 more) |
 | `objective_bound` | `crates/rusolve-ekk/src/lp_data/highs_api_mip.rs`, `crates/rusolve-ekk/src/lp_data/highs_iis_api.rs`, `crates/rusolve-ekk/src/lp_data/highs_presolve.rs`, `crates/rusolve-ekk/src/mip/mip_solver_data/part1.rs`, `crates/rusolve-ekk/src/mip/mip_solver_data/part2.rs`, `crates/rusolve-ekk/src/mip/mip_solver_data/part3.rs` (+6 more) |
 | `objective_target` | `crates/rusolve-ekk/src/mip/mip_solver_data/part3.rs`, `crates/rusolve-ekk/src/mip/search/part2.rs`, `crates/rusolve-ekk/src/simplex/primal/solve.rs` |
-| `threads` | `crates/rusolve-cli/src/api.rs`, `crates/rusolve-cli/src/commands.rs`, `crates/rusolve-cli/src/ekk.rs`, `crates/rusolve-cli/src/envelope.rs`, `crates/rusolve-cli/src/feasrelax.rs`, `crates/rusolve-cli/src/main.rs` (+19 more) |
-| `random_seed` | `crates/rusolve-cli/src/api.rs`, `crates/rusolve-cli/src/ekk.rs`, `crates/rusolve-cli/src/mcp_tools.rs`, `crates/rusolve-cli/src/tune.rs`, `crates/rusolve-ekk/src/lp_data/highs_api_mip.rs`, `crates/rusolve-ekk/src/mip/cut_generation.rs` (+19 more) |
+| `threads` | `crates/rusolve-cli/src/api.rs`, `crates/rusolve-cli/src/commands.rs`, `crates/rusolve-cli/src/cpsat_solve.rs`, `crates/rusolve-cli/src/ekk.rs`, `crates/rusolve-cli/src/envelope.rs`, `crates/rusolve-cli/src/feasrelax.rs` (+22 more) |
+| `random_seed` | `crates/rusolve-cli/src/api.rs`, `crates/rusolve-cli/src/cpsat_solve.rs`, `crates/rusolve-cli/src/ekk.rs`, `crates/rusolve-cli/src/mcp_tools.rs`, `crates/rusolve-cli/src/tune.rs`, `crates/rusolve-ekk/src/lp_data/highs_api_mip.rs` (+20 more) |
 | `parallel` | `crates/rusolve-ekk/src/ipm/hipo/ipm/factor_highs_solver/choose.rs`, `crates/rusolve-ekk/src/ipm/hipo/ipm/factor_highs_solver/parallel.rs`, `crates/rusolve-ekk/src/ipm/hipo/ipm/solver/mod.rs`, `crates/rusolve-ekk/src/ipm/hipo/ipm/solver/output.rs`, `crates/rusolve-ekk/src/lp_data/highs_api_mip.rs`, `crates/rusolve-ekk/src/mip/mip_solver.rs` |
 | `highs_debug_level` | `crates/rusolve-ekk/src/lp_data/highs_presolve.rs`, `crates/rusolve-ekk/src/lp_data/highs_run.rs`, `crates/rusolve-ekk/src/lp_data/highs_solve.rs`, `crates/rusolve-ekk/src/mip/mip_solver_data/part3.rs`, `crates/rusolve-ekk/src/simplex/dual/phases.rs`, `crates/rusolve-ekk/src/simplex/ekk/iterate.rs` (+4 more) |
 | `highs_analysis_level` | `crates/rusolve-ekk/src/ipm/hipo_wrapper/mod.rs`, `crates/rusolve-ekk/src/ipm/ipx_wrapper.rs`, `crates/rusolve-ekk/src/lp_data/highs_api_mip.rs`, `crates/rusolve-ekk/src/lp_data/lp_scale.rs` |
 | `allow_unbounded_or_infeasible` | `crates/rusolve-ekk/src/lp_data/highs_presolve.rs`, `crates/rusolve-ekk/src/lp_data/highs_rays.rs`, `crates/rusolve-ekk/src/lp_data/highs_run.rs`, `crates/rusolve-ekk/src/lp_data/highs_solve.rs`, `crates/rusolve-ekk/src/simplex/ekk/solve.rs` |
-| `presolve` | `crates/rusolve-cli/src/ekk.rs`, `crates/rusolve-cli/src/ekk_seq.rs`, `crates/rusolve-cli/src/main.rs`, `crates/rusolve-cli/src/mip_highs.rs`, `crates/rusolve-ekk/src/lp_data/highs_api_mip.rs`, `crates/rusolve-ekk/src/lp_data/highs_iis_api.rs` (+32 more) |
-| `solver` | `crates/rusolve-cli/src/ekk.rs`, `crates/rusolve-ekk/src/lp_data/highs_api_mip.rs`, `crates/rusolve-ekk/src/lp_data/highs_lp_concurrent.rs`, `crates/rusolve-ekk/src/lp_data/highs_presolve.rs`, `crates/rusolve-ekk/src/lp_data/highs_qp.rs`, `crates/rusolve-ekk/src/lp_data/highs_rays.rs` (+7 more) |
+| `presolve` | `crates/rusolve-cli/src/ekk.rs`, `crates/rusolve-cli/src/ekk_seq.rs`, `crates/rusolve-cli/src/main.rs`, `crates/rusolve-cli/src/mip_highs.rs`, `crates/rusolve-ekk/src/lp_data/highs_api_mip.rs`, `crates/rusolve-ekk/src/lp_data/highs_iis_api.rs` (+33 more) |
+| `solver` | `crates/rusolve-cli/src/ekk.rs`, `crates/rusolve-cli/src/miqp_solve.rs`, `crates/rusolve-ekk/src/lp_data/highs_api_mip.rs`, `crates/rusolve-ekk/src/lp_data/highs_lp_concurrent.rs`, `crates/rusolve-ekk/src/lp_data/highs_presolve.rs`, `crates/rusolve-ekk/src/lp_data/highs_qp.rs` (+8 more) |
 | `run_crossover` | `crates/rusolve-ekk/src/ipm/hipo/ipm/solver/mod.rs`, `crates/rusolve-ekk/src/ipm/hipo/ipm/solver/newton.rs`, `crates/rusolve-ekk/src/ipm/hipo_wrapper/report.rs`, `crates/rusolve-ekk/src/ipm/ipx/control.rs`, `crates/rusolve-ekk/src/ipm/ipx/lp_solver.rs`, `crates/rusolve-ekk/src/ipm/ipx_wrapper.rs` (+6 more) |
 | `use_implied_bounds_from_presolve` | `crates/rusolve-ekk/src/presolve/hpresolve/run.rs` |
 | `lp_presolve_requires_basis_postsolve` | `crates/rusolve-ekk/src/lp_data/highs_presolve.rs`, `crates/rusolve-ekk/src/presolve/hpresolve/parallel.rs`, `crates/rusolve-ekk/src/presolve/hpresolve/presolve_loop.rs` |
@@ -749,7 +749,7 @@ An option is read where its field is accessed (`<expr>.<option>`) outside the op
 | `presolve_rule_logging` | `crates/rusolve-ekk/src/presolve/hpresolve/presolve_loop.rs`, `crates/rusolve-ekk/src/presolve/hpresolve_analysis.rs` |
 | `presolve_remove_slacks` | `crates/rusolve-ekk/src/presolve/hpresolve/presolve_loop.rs` |
 | `presolve_pivot_threshold` | `crates/rusolve-ekk/src/presolve/hpresolve/aggregator.rs` |
-| `mip_feasibility_tolerance` | `crates/rusolve-cli/src/api.rs`, `crates/rusolve-cli/src/check.rs`, `crates/rusolve-cli/src/features.rs`, `crates/rusolve-cli/src/mcp_tools.rs`, `crates/rusolve-cli/src/mip_highs.rs`, `crates/rusolve-cli/src/warm.rs` (+23 more) |
+| `mip_feasibility_tolerance` | `crates/rusolve-cli/src/api.rs`, `crates/rusolve-cli/src/check.rs`, `crates/rusolve-cli/src/cp_solve.rs`, `crates/rusolve-cli/src/cpsat_solve.rs`, `crates/rusolve-cli/src/features.rs`, `crates/rusolve-cli/src/mcp_tools.rs` (+29 more) |
 | `mip_detect_symmetry` | `crates/rusolve-cli/src/profile.rs`, `crates/rusolve-ekk/src/mip/mip_solver_data/part1.rs`, `crates/rusolve-ekk/src/mip/primal_heuristics/part1.rs`, `crates/rusolve-ekk/src/mip/scip_heuristics/sub_mip_s6.rs` |
 | `mip_allow_restart` | `crates/rusolve-ekk/src/mip/mip_solver.rs`, `crates/rusolve-ekk/src/mip/mip_solver_data/part2.rs`, `crates/rusolve-ekk/src/mip/mip_solver_data/part3.rs`, `crates/rusolve-ekk/src/mip/scip_heuristics/sub_mip_s6.rs`, `crates/rusolve-ekk/src/mip/search/part2.rs` |
 | `mip_max_nodes` | `crates/rusolve-cli/src/api.rs`, `crates/rusolve-cli/src/ekk.rs`, `crates/rusolve-cli/src/envelope.rs`, `crates/rusolve-cli/src/features.rs`, `crates/rusolve-cli/src/mcp_tools.rs`, `crates/rusolve-cli/src/mip_highs.rs` (+9 more) |
@@ -777,8 +777,8 @@ An option is read where its field is accessed (`<expr>.<option>`) outside the op
 | `mip_heuristic_run_zi_round` | `crates/rusolve-ekk/src/mip/mip_solver_data/part3.rs`, `crates/rusolve-ekk/src/mip/scip_heuristics/tests_e2e.rs`, `crates/rusolve-ekk/src/mip/search/part1.rs`, `crates/rusolve-ekk/src/mip/search/part2.rs`, `crates/rusolve-ekk/src/mip/symmetry_dynamic/tests_e2e.rs` |
 | `mip_heuristic_run_shifting` | `crates/rusolve-ekk/src/mip/mip_solver_data/part3.rs`, `crates/rusolve-ekk/src/mip/scip_heuristics/tests_e2e.rs`, `crates/rusolve-ekk/src/mip/search/part1.rs`, `crates/rusolve-ekk/src/mip/search/part2.rs`, `crates/rusolve-ekk/src/mip/symmetry_dynamic/tests_e2e.rs` |
 | `mip_allow_cut_separation_at_nodes` | `crates/rusolve-ekk/src/mip/mip_solver.rs`, `crates/rusolve-ekk/src/mip/scip_heuristics/sub_mip_s6.rs` |
-| `mip_rel_gap` | `crates/rusolve-cli/src/tune.rs`, `crates/rusolve-ekk/src/lp_data/highs_api_mip.rs`, `crates/rusolve-ekk/src/mip/mip_solver_data/part2.rs`, `crates/rusolve-ekk/src/mip/mip_solver_report.rs`, `crates/rusolve-ekk/src/mip/mip_worker.rs`, `crates/rusolve-ekk/src/mip/primal_heuristics/part1.rs` (+2 more) |
-| `mip_abs_gap` | `crates/rusolve-cli/src/tune.rs`, `crates/rusolve-ekk/src/lp_data/highs_api_mip.rs`, `crates/rusolve-ekk/src/mip/mip_solver_data/part2.rs`, `crates/rusolve-ekk/src/mip/mip_solver_report.rs`, `crates/rusolve-ekk/src/mip/mip_worker.rs`, `crates/rusolve-ekk/src/mip/primal_heuristics/part1.rs` (+2 more) |
+| `mip_rel_gap` | `crates/rusolve-cli/src/cpsat_solve.rs`, `crates/rusolve-cli/src/misocp_solve.rs`, `crates/rusolve-cli/src/tune.rs`, `crates/rusolve-ekk/src/lp_data/highs_api_mip.rs`, `crates/rusolve-ekk/src/mip/mip_solver_data/part2.rs`, `crates/rusolve-ekk/src/mip/mip_solver_report.rs` (+4 more) |
+| `mip_abs_gap` | `crates/rusolve-cli/src/cpsat_solve.rs`, `crates/rusolve-cli/src/tune.rs`, `crates/rusolve-ekk/src/lp_data/highs_api_mip.rs`, `crates/rusolve-ekk/src/mip/mip_solver_data/part2.rs`, `crates/rusolve-ekk/src/mip/mip_solver_report.rs`, `crates/rusolve-ekk/src/mip/mip_worker.rs` (+3 more) |
 | `mip_min_logging_interval` | `crates/rusolve-ekk/src/mip/mip_solver_data/part2.rs` |
 | `mip_lp_solver` | `crates/rusolve-ekk/src/lp_data/highs_api_mip.rs`, `crates/rusolve-ekk/src/mip/lp_relaxation/part2.rs` |
 | `mip_ipm_solver` | `crates/rusolve-ekk/src/lp_data/highs_api_mip.rs`, `crates/rusolve-ekk/src/mip/lp_relaxation/part2.rs`, `crates/rusolve-ekk/src/mip/lp_relaxation/root_race.rs`, `crates/rusolve-ekk/src/mip/mip_solver_data/part1.rs` |
@@ -885,6 +885,16 @@ An option is read where its field is accessed (`<expr>.<option>`) outside the op
 | `mip_cut_selection_hybrid` | `crates/rusolve-ekk/src/lp_data/highs_api_mip.rs`, `crates/rusolve-ekk/src/mip/race.rs`, `crates/rusolve-ekk/src/mip/separation.rs` |
 | `mip_knapsack_cover_sepa` | `crates/rusolve-ekk/src/mip/separation.rs` |
 | `mip_dff_separator` | `crates/rusolve-ekk/src/mip/separation.rs` |
+| `mip_lp_skip_refactor_check` | `crates/rusolve-ekk/src/mip/lp_relaxation/part1.rs` |
+| `mip_lp_keep_dse_weights` | `crates/rusolve-ekk/src/mip/lp_relaxation/mod.rs`, `crates/rusolve-ekk/src/mip/lp_relaxation/part1.rs`, `crates/rusolve-ekk/src/mip/lp_relaxation/part2.rs`, `crates/rusolve-ekk/src/simplex/ekk/clear.rs`, `crates/rusolve-ekk/src/simplex/ekk/dse_keep.rs`, `crates/rusolve-ekk/src/simplex/ekk/solve.rs` |
+| `miqp_oa` | only the option tables |
+| `miqp_oa_disaggregate` | only the option tables |
+| `miqp_oa_lazy_only` | only the option tables |
+| `misocp_oa` | only the option tables |
+| `misocp_oa_disaggregate` | only the option tables |
+| `misocp_oa_no_polish` | only the option tables |
+| `misocp_oa_lazy_only` | only the option tables |
+| `mip_engine` | `crates/rusolve-cli/src/cp_solve.rs`, `crates/rusolve-cli/src/cpsat_solve.rs`, `crates/rusolve-ekk/src/lp_data/highs_api_mip.rs` |
 | `mip_tableau_loosen` | `crates/rusolve-ekk/src/mip/tableau_separator.rs` |
 | `mip_tableau_loosen_auto` | `crates/rusolve-ekk/src/mip/tableau_separator.rs` |
 | `mip_ti_precedence_sepa` | `crates/rusolve-ekk/src/mip/machine_sched_separator.rs`, `crates/rusolve-ekk/src/mip/separation.rs`, `crates/rusolve-ekk/src/mip/ti_precedence_separator.rs`, `crates/rusolve-ekk/src/presolve/hpresolve/xor_gf2.rs` |
@@ -894,18 +904,32 @@ An option is read where its field is accessed (`<expr>.<option>`) outside the op
 | `mip_netdesign_heur` | `crates/rusolve-ekk/src/mip/machine_sched_separator.rs`, `crates/rusolve-ekk/src/mip/netdesign_separator.rs`, `crates/rusolve-ekk/src/mip/separation.rs` |
 | `mip_netdesign_cutset` | `crates/rusolve-ekk/src/mip/machine_sched_separator.rs`, `crates/rusolve-ekk/src/mip/netdesign_separator.rs`, `crates/rusolve-ekk/src/mip/separation.rs` |
 | `mip_cutoff_bigm` | `crates/rusolve-ekk/src/lp_data/highs_api_mip.rs`, `crates/rusolve-ekk/src/mip/mip_solver_data/part2.rs`, `crates/rusolve-ekk/src/mip/race.rs` |
-| `mip_node_bigm` | `crates/rusolve-ekk/src/lp_data/highs_api_mip.rs`, `crates/rusolve-ekk/src/mip/search/part1.rs` |
+| `mip_node_bigm` | `crates/rusolve-ekk/src/lp_data/highs_api_mip.rs`, `crates/rusolve-ekk/src/mip/lp_relaxation/local_bigm.rs`, `crates/rusolve-ekk/src/mip/search/part1.rs` |
 | `mip_node_bigm_rows` | `crates/rusolve-ekk/src/lp_data/highs_api_mip.rs`, `crates/rusolve-ekk/src/mip/lp_relaxation/local_bigm.rs` |
 | `mip_node_bigm_min_ratio` | `crates/rusolve-ekk/src/mip/lp_relaxation/local_bigm.rs` |
 | `mip_node_bigm_active` | `crates/rusolve-ekk/src/mip/lp_relaxation/local_bigm.rs` |
 | `mip_cont_prop_improve` | `crates/rusolve-ekk/src/mip/domain/activity.rs`, `crates/rusolve-ekk/src/mip/domain/propagation.rs`, `crates/rusolve-ekk/src/mip/domain/stack.rs`, `crates/rusolve-ekk/src/mip/implications.rs` |
 | `mip_pscost_variance_tol` | `crates/rusolve-ekk/src/mip/pseudocost.rs` |
+| `mip_child_selection` | `crates/rusolve-ekk/src/mip/search/part1.rs`, `crates/rusolve-ekk/src/mip/search/part2.rs` |
+| `mip_child_selection_switch_gap` | `crates/rusolve-ekk/src/mip/search/part1.rs` |
+| `mip_plunge_gap` | `crates/rusolve-ekk/src/mip/search/part1.rs`, `crates/rusolve-ekk/src/mip/search/part2.rs` |
+| `mip_plunge_quot` | `crates/rusolve-ekk/src/mip/search/part1.rs`, `crates/rusolve-ekk/src/mip/search/part2.rs` |
+| `mip_plunge_max_nodes` | `crates/rusolve-ekk/src/mip/mip_solver.rs`, `crates/rusolve-ekk/src/mip/search/part2.rs` |
+| `mip_plunge_bestbound_freq` | `crates/rusolve-ekk/src/mip/mip_solver.rs`, `crates/rusolve-ekk/src/mip/search/part2.rs` |
 | `mip_rens_min_fixing_rate` | `crates/rusolve-ekk/src/mip/primal_heuristics/part1.rs` |
+| `mip_node_sepa_maxbounddist` | `crates/rusolve-ekk/src/mip/mip_solver.rs` |
+| `mip_node_sepa_freq` | `crates/rusolve-ekk/src/mip/mip_solver.rs` |
+| `mip_node_sepa_pool_only` | `crates/rusolve-ekk/src/mip/mip_solver.rs` |
+| `mip_node_sepa_max_rounds` | `crates/rusolve-ekk/src/mip/search/part2.rs`, `crates/rusolve-ekk/src/mip/separation.rs` |
+| `mip_node_install_basis` | `crates/rusolve-ekk/src/mip/lp_relaxation/mod.rs`, `crates/rusolve-ekk/src/mip/lp_relaxation/part1.rs`, `crates/rusolve-ekk/src/mip/search/part1.rs`, `crates/rusolve-ekk/src/mip/search/part2.rs` |
+| `mip_node_rounding` | `crates/rusolve-ekk/src/mip/mip_solver_report.rs`, `crates/rusolve-ekk/src/mip/search/part2.rs` |
+| `mip_node_rounding_polish` | `crates/rusolve-ekk/src/mip/search/part2.rs` |
 | `mip_heuristic_run_oneopt` | `crates/rusolve-ekk/src/lp_data/highs_api_mip.rs`, `crates/rusolve-ekk/src/mip/mip_solver.rs`, `crates/rusolve-ekk/src/mip/mip_solver_data/part2.rs`, `crates/rusolve-ekk/src/mip/scip_heuristics/driver.rs`, `crates/rusolve-ekk/src/mip/scip_heuristics/tests_e2e.rs` |
 | `mip_heuristic_run_crossover` | `crates/rusolve-ekk/src/lp_data/highs_api_mip.rs`, `crates/rusolve-ekk/src/mip/mip_solver.rs`, `crates/rusolve-ekk/src/mip/mip_solver_data/part2.rs`, `crates/rusolve-ekk/src/mip/scip_heuristics/alns.rs`, `crates/rusolve-ekk/src/mip/scip_heuristics/driver.rs`, `crates/rusolve-ekk/src/mip/scip_heuristics/mod.rs` (+1 more) |
 | `mip_heuristic_run_fpr` | `crates/rusolve-ekk/src/lp_data/highs_api_mip.rs`, `crates/rusolve-ekk/src/mip/feasibility_jump.rs`, `crates/rusolve-ekk/src/mip/fpr_local_mip/driver.rs`, `crates/rusolve-ekk/src/mip/fpr_local_mip/tests_e2e.rs`, `crates/rusolve-ekk/src/mip/mip_solver.rs`, `crates/rusolve-ekk/src/presolve/hpresolve/mip_dominated.rs` |
 | `mip_heuristic_run_local_mip` | `crates/rusolve-ekk/src/lp_data/highs_api_mip.rs`, `crates/rusolve-ekk/src/mip/feasibility_jump.rs`, `crates/rusolve-ekk/src/mip/fpr_local_mip/driver.rs`, `crates/rusolve-ekk/src/mip/fpr_local_mip/gub_swap.rs`, `crates/rusolve-ekk/src/mip/fpr_local_mip/tests_e2e.rs`, `crates/rusolve-ekk/src/mip/mip_solver.rs` (+1 more) |
 | `mip_strengthen_cover_guard` | `crates/rusolve-ekk/src/lp_data/highs_api_mip.rs`, `crates/rusolve-ekk/src/presolve/hpresolve/mip_stubs.rs` |
+| `mip_presolve_exact_strengthen` | `crates/rusolve-ekk/src/lp_data/highs_api_mip.rs`, `crates/rusolve-ekk/src/presolve/hpresolve/row_presolve.rs` |
 | `mip_ls_gub_swap` | `crates/rusolve-ekk/src/lp_data/highs_api_mip.rs`, `crates/rusolve-ekk/src/mip/fpr_local_mip/context.rs`, `crates/rusolve-ekk/src/mip/fpr_local_mip/gub_swap.rs` |
 | `mip_ls_int_lp_repair` | `crates/rusolve-ekk/src/lp_data/highs_api_mip.rs`, `crates/rusolve-ekk/src/mip/feasibility_jump.rs`, `crates/rusolve-ekk/src/mip/fpr_local_mip/driver.rs`, `crates/rusolve-ekk/src/mip/ls_int_lp_repair.rs` |
 | `mip_alns` | `crates/rusolve-ekk/src/lp_data/highs_api_mip.rs`, `crates/rusolve-ekk/src/mip/mip_solver.rs`, `crates/rusolve-ekk/src/mip/mip_solver_data/part2.rs`, `crates/rusolve-ekk/src/mip/mip_solver_report.rs`, `crates/rusolve-ekk/src/mip/primal_heuristics/part1.rs`, `crates/rusolve-ekk/src/mip/race.rs` (+4 more) |
@@ -990,7 +1014,7 @@ An option is read where its field is accessed (`<expr>.<option>`) outside the op
 | `hipo_parallel_type` | `crates/rusolve-ekk/src/ipm/hipo/ipm/solver/mod.rs`, `crates/rusolve-ekk/src/lp_data/highs_api_mip.rs` |
 | `hipo_ordering` | `crates/rusolve-ekk/src/ipm/hipo/ipm/solver/mod.rs`, `crates/rusolve-ekk/src/lp_data/highs_api_mip.rs` |
 | `hipo_block_size` | `crates/rusolve-ekk/src/ipm/hipo/ipm/solver/mod.rs`, `crates/rusolve-ekk/src/lp_data/highs_api_mip.rs` |
-| `hipo_available` | `crates/rusolve-cli/src/ekk.rs`, `crates/rusolve-ekk/src/lp_data/highs_api_mip.rs`, `crates/rusolve-ekk/src/lp_data/highs_lp_concurrent.rs`, `crates/rusolve-ekk/src/lp_data/highs_qp.rs`, `crates/rusolve-ekk/src/lp_data/highs_run.rs`, `crates/rusolve-ekk/src/lp_data/highs_solve.rs` |
+| `hipo_available` | `crates/rusolve-cli/src/ekk.rs`, `crates/rusolve-cli/src/miqp_solve.rs`, `crates/rusolve-ekk/src/lp_data/highs_api_mip.rs`, `crates/rusolve-ekk/src/lp_data/highs_lp_concurrent.rs`, `crates/rusolve-ekk/src/lp_data/highs_qp.rs`, `crates/rusolve-ekk/src/lp_data/highs_run.rs` (+1 more) |
 | `qp_allow_hot_start` | `crates/rusolve-ekk/src/lp_data/highs_api_mip.rs`, `crates/rusolve-ekk/src/lp_data/highs_qp.rs` |
 | `qp_iteration_limit` | `crates/rusolve-ekk/src/lp_data/highs_api_mip.rs`, `crates/rusolve-ekk/src/lp_data/highs_qp.rs` |
 | `qp_nullspace_limit` | `crates/rusolve-ekk/src/lp_data/highs_api_mip.rs`, `crates/rusolve-ekk/src/lp_data/highs_qp.rs` |
@@ -1005,7 +1029,7 @@ An option is read where its field is accessed (`<expr>.<option>`) outside the op
 | `icrash_approx_iter` | `crates/rusolve-ekk/src/lp_data/highs_api_mip.rs`, `crates/rusolve-ekk/src/lp_data/highs_run.rs` |
 | `icrash_exact` | `crates/rusolve-ekk/src/lp_data/highs_api_mip.rs`, `crates/rusolve-ekk/src/lp_data/highs_run.rs` |
 | `icrash_breakpoints` | `crates/rusolve-ekk/src/lp_data/highs_api_mip.rs`, `crates/rusolve-ekk/src/lp_data/highs_run.rs` |
-| `primal_feasibility_tolerance` | `crates/rusolve-cli/src/api.rs`, `crates/rusolve-cli/src/check.rs`, `crates/rusolve-cli/src/mcp_tools.rs`, `crates/rusolve-cli/src/mip_highs.rs`, `crates/rusolve-cli/src/warm.rs`, `crates/rusolve-ekk/src/ipm/hipo/ipm/solver/mod.rs` (+41 more) |
+| `primal_feasibility_tolerance` | `crates/rusolve-cli/src/api.rs`, `crates/rusolve-cli/src/check.rs`, `crates/rusolve-cli/src/cpsat_solve.rs`, `crates/rusolve-cli/src/mcp_tools.rs`, `crates/rusolve-cli/src/mip_highs.rs`, `crates/rusolve-cli/src/warm.rs` (+42 more) |
 | `dual_feasibility_tolerance` | `crates/rusolve-ekk/src/ipm/hipo/ipm/solver/mod.rs`, `crates/rusolve-ekk/src/ipm/ipx_wrapper.rs`, `crates/rusolve-ekk/src/lp_data/highs_api_mip.rs`, `crates/rusolve-ekk/src/lp_data/highs_iis/part3.rs`, `crates/rusolve-ekk/src/lp_data/highs_qp.rs`, `crates/rusolve-ekk/src/lp_data/highs_solve.rs` (+27 more) |
 | `kkt_tolerance` | `crates/rusolve-ekk/src/ipm/hipo/ipm/solver/mod.rs`, `crates/rusolve-ekk/src/ipm/hipo_wrapper/mod.rs`, `crates/rusolve-ekk/src/ipm/ipx_wrapper.rs`, `crates/rusolve-ekk/src/lp_data/presolve_support.rs`, `crates/rusolve-ekk/src/pdlp/cupdlp_wrapper/formulate.rs`, `crates/rusolve-ekk/src/pdlp/hipdlp/pdhg/power.rs` |
 | `primal_residual_tolerance` | `crates/rusolve-ekk/src/lp_data/presolve_support.rs` |
@@ -1043,7 +1067,7 @@ An option is read where its field is accessed (`<expr>.<option>`) outside the op
 | `simplex_permute_strategy` | `crates/rusolve-ekk/src/simplex/happ.rs` |
 | `factor_pivot_threshold` | `crates/rusolve-ekk/src/lp_data/highs_presolve.rs`, `crates/rusolve-ekk/src/simplex/dual/iterate.rs`, `crates/rusolve-ekk/src/simplex/ekk/clear.rs`, `crates/rusolve-ekk/src/simplex/ekk/iterate.rs`, `crates/rusolve-ekk/src/simplex/ekk/solve.rs` |
 | `factor_pivot_tolerance` | `crates/rusolve-ekk/src/simplex/nla/nla.rs` |
-| `output_flag` | `crates/rusolve-cli/src/check.rs`, `crates/rusolve-cli/src/feasrelax.rs`, `crates/rusolve-cli/src/mip_highs.rs`, `crates/rusolve-cli/src/profile.rs`, `crates/rusolve-cli/src/tune.rs`, `crates/rusolve-ekk/src/io/highs_io.rs` (+65 more) |
+| `output_flag` | `crates/rusolve-cli/src/check.rs`, `crates/rusolve-cli/src/feasrelax.rs`, `crates/rusolve-cli/src/mip_highs.rs`, `crates/rusolve-cli/src/miqp_solve.rs`, `crates/rusolve-cli/src/misocp_solve.rs`, `crates/rusolve-cli/src/profile.rs` (+68 more) |
 | `log_to_console` | `crates/rusolve-cli/src/check.rs`, `crates/rusolve-cli/src/feasrelax.rs`, `crates/rusolve-cli/src/profile.rs`, `crates/rusolve-ekk/src/io/highs_io.rs`, `crates/rusolve-ekk/src/ipm/hipo/ipm/solver/mod.rs`, `crates/rusolve-ekk/src/ipm/ipx_wrapper.rs` (+7 more) |
 | `log_dev_level` | `crates/rusolve-ekk/src/io/highs_io.rs`, `crates/rusolve-ekk/src/ipm/hipo/auxiliary/logger.rs`, `crates/rusolve-ekk/src/ipm/hipo/ipm/solver/mod.rs`, `crates/rusolve-ekk/src/ipm/ipx_wrapper.rs`, `crates/rusolve-ekk/src/lp_data/highs_api_mip.rs`, `crates/rusolve-ekk/src/lp_data/highs_iis/part4.rs` (+12 more) |
 | `timeless_log` | `crates/rusolve-ekk/src/ipm/hipo/ipm/factor_highs_solver/mod.rs`, `crates/rusolve-ekk/src/ipm/hipo/ipm/solver/mod.rs`, `crates/rusolve-ekk/src/ipm/hipo/ipm/solver/newton.rs`, `crates/rusolve-ekk/src/ipm/hipo/ipm/solver/output.rs`, `crates/rusolve-ekk/src/ipm/ipx/control.rs`, `crates/rusolve-ekk/src/ipm/ipx/ipm/part2.rs` (+9 more) |

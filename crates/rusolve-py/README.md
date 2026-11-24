@@ -130,7 +130,7 @@ except rs.InfeasibleError as e:
 
 | class | codes | raised when |
 |---|---|---|
-| `ModelError` (also `ValueError`) | RS4001, RS4003 | a model-building call gets a bad argument, or mixes two Models |
+| `ModelError` (also `ValueError`) | RS4001, RS4003, RS4009, RS4010, RS4011, RS4012, RS4013 | a model-building call gets a bad argument, or mixes two Models; a general constraint is malformed (RS4009) or a call cannot honour one (RS4010); a scheduling object is malformed (RS4011), a call cannot honour one (RS4012) or the MIP fallback cannot take it (RS4013) |
 | `ModelIndexError` (also `IndexError`) | RS4002 | a row or column index is out of range |
 | `InfeasibleError`, `UnboundedError`, `LimitError` | RS4004, RS4005, RS4006 | `Solution.raise_for_status()` on that status |
 | `NoSolutionError` (also `ValueError`) | RS4007 | a value is read from a Solution without one |
@@ -157,6 +157,69 @@ m.set_quadratic_objective(None)                    # back to the LP
 `Q` is a scipy.sparse matrix, a 2-D array or a list of lists; duplicates are summed and an
 asymmetric `Q` becomes `(Q + Q')/2`, which has the same objective. Quadratic *constraints* are
 not supported. Models without a Hessian take the unchanged LP/MIP path.
+
+## General constraints
+
+Indicator, SOS1/SOS2, piecewise-linear, abs/min/max and and/or/not are methods of `Model`; each
+returns the object's name. `solve()` linearizes a copy of the model the way `rusolve mip` does for
+the same objects in a file (big-M from activity bounds, incremental piecewise-linear, an LP
+epigraph when the objective pushes the right way), and `check()`, `write()` (LP; MPS holds
+indicator and SOS only) and the result envelope report on your objects, not on generated rows.
+
+```python
+import rusolve as rs
+m = rs.Model()
+z = m.add_var(binary=True, cost=7); x = m.add_var(ub=10, cost=2); y = m.add_var(ub=10, cost=1)
+m.add_constr(x + y >= 3)
+m.add_indicator(z, 0, x >= 4)                    # z = 0 -> x >= 4
+# also add_sos1, add_sos2, add_pwl, add_abs, add_max, add_min, add_and, add_or, add_not
+sol = m.solve()
+gc = sol.general_constraints                     # None for a model without general constraints
+assert gc is not None
+gc["verified"]                                   # the checker's verdict on the objects
+```
+
+A malformed object raises `ModelError` with code `RS4009` (non-binary indicator variable, unsorted
+or short breakpoints, mismatched lengths); an unknown variable raises `ModelIndexError`. The
+diagnostics that would ignore the objects (`explain`, `iis`, `ranging`, `feasrelax`, `diagnose`), a
+`solve` callback and a quadratic objective refuse such a model with `RS4010`.
+
+## Scheduling and combinatorial objects
+
+Intervals, no-overlap, cumulative, all-different, element and table are methods of `Model`
+(spec: [cp-model.md](../../docs/design/cp-model.md)). They range over integer variables with finite
+bounds. `add_interval(start, size, end=None, presence=None)` returns an `Interval`; `size` is an
+int or an integer Var, and `end` is made for you when you leave it out. `solve()` linearizes a
+copy of the model into a MIP (time-indexed for cumulative, so the horizon is limited), checks the
+answer on your objects and cuts it back to your variables; `sol.cp` is the report (`None` for a
+model without these objects) and `check()` evaluates the objects too. There is no MPS or LP syntax
+for them, so `write()` refuses such a model.
+
+```python
+import rusolve as rs
+m = rs.Model()
+cmax = m.add_var(ub=20, integer=True, cost=1)
+jobs = []
+for p in (3, 2, 4):
+    s = m.add_var(ub=20, integer=True)
+    job = m.add_interval(s, p)                       # start s, size p, end made for you
+    m.add_constr(cmax >= job.end)
+    jobs.append(job)
+m.add_no_overlap(jobs)                               # one machine
+sol = m.solve()
+report = sol.cp
+assert report is not None and report["verified"]
+assert sol.objective == 9.0 and m.check(sol)["verdict"] == "feasible"
+# also add_cumulative(jobs, demands, capacity), add_all_different(vars),
+# add_element(index, values, target), add_table(vars, tuples, negated=False)
+```
+
+A malformed object raises `ModelError` with code `RS4011` (a variable that is not integer or has
+no finite bounds, a negative size, a tuple of the wrong length, an interval listed twice).
+`solve()` raises `RS4013` for a valid object the MIP fallback cannot take (a cumulative horizon
+above 1000 time points, a variable size or demand in a cumulative, a derived big-M above 1e6).
+`explain`, `iis`, `ranging`, `feasrelax`, `diagnose`, `write`, a `solve` callback and a quadratic
+objective refuse such a model with `RS4012`.
 
 ## SciPy drop-in
 

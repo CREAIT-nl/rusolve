@@ -84,6 +84,10 @@
           "description": "Semi-continuous membership and general constraints; present only for a model that has them.",
           "$ref": "#/$defs/counts"
         },
+        "cp": {
+          "description": "Scheduling and combinatorial (CP) objects: interval, no-overlap, cumulative, all-different, element, table; present only for a model that has them (Python and MCP models; no file format carries them).",
+          "$ref": "#/$defs/counts"
+        },
         "total_violations": { "type": "integer", "minimum": 0 }
       }
     },
@@ -158,11 +162,17 @@
               "indicator",
               "sos",
               "pwl",
-              "function"
+              "function",
+              "interval",
+              "no_overlap",
+              "cumulative",
+              "all_different",
+              "element",
+              "table"
             ]
           },
           "detail": {
-            "description": "Semi-continuous and general-constraint kinds only: what is violated, in words.",
+            "description": "Semi-continuous, general-constraint and CP kinds only: what is violated, in words.",
             "type": "string"
           },
           "name": { "type": "string" },

@@ -327,6 +327,7 @@ pub fn read_mof(bytes: &[u8]) -> Result<Model, MofError> {
         hessian: Vec::new(),
         gc: Default::default(),
         conic: Default::default(),
+        cp: Default::default(),
     })
 }
 

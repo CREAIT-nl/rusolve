@@ -820,6 +820,29 @@ fn highs_lp_from_model(
     lp
 }
 
+/// Tells the OR-Tools loader where the `ortools` Python package of this environment is (the
+/// directory holding `.libs/`), because inside Python the executable is the interpreter and the
+/// loader's paths relative to the executable do not apply (`rusolve_cpsat::runtime`). Loads nothing.
+#[pyfunction]
+fn _set_ortools_dir(dir: std::path::PathBuf) {
+    rusolve_cpsat::runtime::set_hint(dir);
+}
+
+/// Whether the OR-Tools library for `mip_engine="cpsat"` can be loaded, without solving:
+/// `{"available", "library", "version", "searched", "error"}`. Loads the library when it is found.
+#[pyfunction]
+fn cpsat_info(py: Python<'_>) -> PyResult<Bound<'_, pyo3::types::PyDict>> {
+    use pyo3::types::PyDict;
+    let a = rusolve_cpsat::runtime::availability();
+    let d = PyDict::new(py);
+    d.set_item("available", a.available)?;
+    d.set_item("library", a.library.map(|p| p.display().to_string()))?;
+    d.set_item("version", a.version)?;
+    d.set_item("searched", a.searched)?;
+    d.set_item("error", a.error)?;
+    Ok(d)
+}
+
 #[pymodule]
 fn _rusolve(m: &Bound<'_, PyModule>) -> PyResult<()> {
     expr::register(m)?;
@@ -835,6 +858,8 @@ fn _rusolve(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<ObjSense>()?;
     m.add_class::<MatrixFormat>()?;
     m.add_class::<HighsVarType>()?;
+    m.add_function(wrap_pyfunction!(cpsat_info, m)?)?;
+    m.add_function(wrap_pyfunction!(_set_ortools_dir, m)?)?;
     m.add("kHighsInf", f64::INFINITY)?;
     m.add("kHighsIInf", i32::MAX)?;
     Ok(())

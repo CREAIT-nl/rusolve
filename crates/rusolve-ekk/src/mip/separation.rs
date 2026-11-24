@@ -44,6 +44,11 @@ pub struct HighsSeparation {
     pub lp: Option<usize>,
     /// SCIP cutsel_hybrid.c randnumgen (cutseldata :62-74); None unless mip_cut_selection_hybrid
     pub(crate) s4_randnumgen: Option<crate::mip::cut_selection::S4RandNumGen>,
+    /// rusolve mip_node_sepa_pool_only: set by the tree-node gate (`HighsMipSolver::
+    /// run_separate_and_store_basis`) for one `separate` call. The round then only propagates
+    /// and adds violated cut-pool cuts: implied bounds, cliques, degenerate-dual conflicts, the
+    /// separators and the user hook are skipped. Always false otherwise.
+    pub(crate) pool_only: bool,
 }
 
 /// rusolve: a process-wide increasing number for separator-built solutions; only the relative
@@ -127,6 +132,7 @@ impl HighsSeparation {
             cutset: HighsCutSet::default(),
             lp: None,
             s4_randnumgen,
+            pool_only: false,
         }
     }
 
@@ -143,6 +149,11 @@ impl HighsSeparation {
         let globaldom = ctx.worker.globaldom_;
         let cutpool = ctx.worker.cutpool_;
         ctx.ms.stats_.sepa_rounds.add(1); // reporting-only
+
+        // rusolve mip_node_sepa_pool_only: propagation and the cut pool only (see `pool_only`)
+        if self.pool_only {
+            return self.pool_only_round(ctx, propdomain, status);
+        }
 
         if !ctx.ms.parallel_lock_active() {
             ctx.ms.profiling_.start(self.impl_bound_clock, false);
@@ -270,6 +281,23 @@ impl HighsSeparation {
             ncuts += numboundchgs;
         }
 
+        ncuts + self.separate_cut_pools_and_resolve(ctx, propdomain, status, globaldom, cutpool)
+    }
+
+    /// The tail of HiGHS `separationRound`, from `getCutPool().separate(...)` to the end:
+    /// collect the violated cuts of the worker's and the global cut pool, add them to the LP and
+    /// resolve. Returns the number of cuts added. Split out unchanged so the rusolve pool-only
+    /// round can share it.
+    fn separate_cut_pools_and_resolve(
+        &mut self,
+        ctx: &mut SepaCtx<'_>,
+        propdomain: &mut HighsDomain,
+        status: &mut HighsLpRelaxation_Status,
+        globaldom: usize,
+        cutpool: usize,
+    ) -> HighsInt {
+        let feastol = ctx.ms.mipdata_.feastol;
+        let mut ncuts: HighsInt = 0;
         let s4 = ctx.ms.options_mip_.mip_cut_selection_hybrid;
         // mip_cut_selection_hybrid: SCIP sepastore.c lines 934-1058 at 32dd425
         if s4 {
@@ -335,6 +363,28 @@ impl HighsSeparation {
         ncuts
     }
 
+    /// rusolve mip_node_sepa_pool_only: the round run at a tree node the gate excludes. It keeps
+    /// the propagation and the cut-pool part of `separation_round` and skips implied bounds,
+    /// cliques, degenerate-dual conflicts, the separators and the user hook, which is where
+    /// node separation spends its time (cMIR aggregation and clique extraction from new cuts).
+    /// The pool cuts are globally valid, so the node still gets the bound they give, without
+    /// the cost of finding new ones.
+    fn pool_only_round(
+        &mut self,
+        ctx: &mut SepaCtx<'_>,
+        propdomain: &mut HighsDomain,
+        status: &mut HighsLpRelaxation_Status,
+    ) -> HighsInt {
+        let globaldom = ctx.worker.globaldom_;
+        let cutpool = ctx.worker.cutpool_;
+        let numboundchgs = propagate_and_resolve(ctx, propdomain, status);
+        if numboundchgs == -1 {
+            return 0;
+        }
+        numboundchgs
+            + self.separate_cut_pools_and_resolve(ctx, propdomain, status, globaldom, cutpool)
+    }
+
     /// HiGHS: HighsSeparation.cpp::HighsSeparation::separate (lines 181-228)
     /// C++: `void separate(HighsDomain & propdomain)`
     pub fn separate(&mut self, ctx: &mut SepaCtx<'_>, propdomain: &mut HighsDomain) {
@@ -348,6 +398,12 @@ impl HighsSeparation {
         {
             // double firstobj = lp->getObjective();
             let firstobj = ctx.ms.mipdata_.rootlpsolobj;
+            // rusolve mip_node_sepa_max_rounds: SCIP's separating/maxrounds for local nodes
+            // (src/scip/set.c SCIP_DEFAULT_SEPA_MAXROUNDS, read in priceAndCutLoop of
+            // src/scip/solve.c, Apache-2.0): the round loop stops after this many rounds. 0 (the
+            // default) leaves only the HiGHS stopping rules below.
+            let max_rounds = ctx.ms.options_mip_.mip_node_sepa_max_rounds;
+            let mut nrounds: HighsInt = 0;
 
             while ctx.lp.get_objective() < ctx.worker.optimality_limit {
                 let lastobj = ctx.lp.get_objective();
@@ -369,6 +425,11 @@ impl HighsSeparation {
                     || !HighsLpRelaxation::scaled_optimal(status)
                     || ctx.lp.get_fractional_integers().is_empty()
                 {
+                    break;
+                }
+
+                nrounds += 1;
+                if max_rounds > 0 && nrounds >= max_rounds {
                     break;
                 }
 

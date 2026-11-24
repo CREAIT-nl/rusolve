@@ -1674,6 +1674,7 @@ impl P {
                 quad_rows,
                 cones: Vec::new(),
             },
+            cp: Default::default(),
         })
     }
 }

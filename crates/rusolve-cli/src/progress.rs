@@ -84,6 +84,7 @@ fn solution_source(code: HighsInt) -> Option<(&'static str, &'static str)> {
         kSolutionSourceFPR => ("A", "FPR"),
         kSolutionSourceLocalMIP => ("M", "Local MIP"),
         kSolutionSourceShiftProp => ("Q", "Shift and propagate"),
+        kSolutionSourceNodeRounding => ("D", "Node rounding"),
         _ => return None,
     })
 }

@@ -11,7 +11,7 @@ Three shapes, three formulations, in order of cost:
 |---|---|---|
 | **convex** cost, minimised (tiered cost that rises with volume) | epigraph: `c >= a_k x + b_k` for every piece `k` | none: pure LP |
 | **semi-continuous** `x = 0` or `lb <= x <= ub` | `Model.set_semi(x)` (no binary written by hand) | handled by the solver |
-| **non-convex** cost (volume discount, fixed charge plus slope) | `PWL` general constraint in an LP file, or a binary per piece | solver adds them (incremental or log formulations; Vielma, Ahmed and Nemhauser, *Operations Research* 58, 2010) |
+| **non-convex** cost (volume discount, fixed charge plus slope) | `Model.add_pwl(x, y, xs, ys)`, or a `PWL` row in an LP file, or a binary per piece | solver adds them (incremental or log formulations; Vielma, Ahmed and Nemhauser, *Operations Research* 58, 2010) |
 
 The router (`rusolve mip`) classifies a model with these objects as `gc` / `gc_mip` and reports
 how each was handled in the envelope's `general_constraints.routes` (`epigraph_lp`,
@@ -129,6 +129,33 @@ The envelope's `general_constraints.verified` is `true` when the solver re-check
 (the PWL value and the semi-continuous condition) on the final solution, and `violations` lists any
 object that failed. Treat `verified: false` as not solved.
 
+### The same objects from Python
+
+The Python `Model` takes every general constraint as a method. Each returns the object's name
+(`name=` or a generated one), and `solve()` linearizes a copy the way `rusolve mip` does for a
+file; the model itself, `check()` and the envelope stay on your objects.
+
+```python
+z = m.add_var(binary=True, cost=7)
+x, y, r = m.add_vars(3, ub=10)
+m.add_indicator(z, 0, x >= 4)              # z = 0 -> x >= 4 (one-sided or equality row)
+m.add_sos1([x, y]); m.add_sos2([x, y, r], weights=[1, 2, 3])
+m.add_pwl(x, y, [0, 2, 4, 6], [0, 4, 4.5, 10])   # y = f(x), x restricted to [0, 6]
+m.add_abs(r, x); m.add_max(r, [x, y], constant=1); m.add_min(r, [x, y])
+a, b, c = m.add_vars(3, binary=True)
+m.add_and(c, [a, b]); m.add_or(c, [a, b]); m.add_not(c, a)
+sol = m.solve()
+sol.general_constraints                    # objects, routes, violations, verified
+```
+
+A malformed object raises `rs.ModelError` with code `RS4009` (non-binary indicator variable,
+unsorted or short breakpoints, mismatched lengths, a variable that is not binary in and/or/not);
+an unknown variable raises `ModelIndexError` (`RS4002`). `explain`, `iis`, `ranging`, `feasrelax`,
+`diagnose`, a `solve` callback and a quadratic objective refuse a model that has these objects
+(`RS4010`) rather than ignore them. `write("m.lp")` keeps the objects; MPS holds indicator and SOS
+only. `check(sol)` evaluates indicators on rounded binaries, so a binary at 1e-7 cannot buy a
+violation.
+
 Other general constraints in the LP format: `y = ABS ( x )`, `y = MAX ( a , b , 1 )`, `MIN`,
 `AND`, `OR`, indicator rows `z = 1 -> row`, SOS rows (`name: S1 :: x : 1 y : 2`). Convex directions
 (minimising `|x|`, or `max(...)` pushed down) become pure LPs; the other direction adds a binary.
@@ -143,8 +170,9 @@ Other general constraints in the LP format: `y = ABS ( x )`, `y = MAX ( a , b , 
 - **The epigraph for a non-convex curve.** The rows `c >= a_k x + b_k` describe the convex function
   `max_k(a_k x + b_k)`, which is not your curve once the slopes stop rising. Check the slopes are
   non-decreasing before using block 1; if not, use the `PWL` general constraint of block 3.
-- **Breakpoints out of order.** List them in increasing `x`. A cost that jumps (a fixed charge) is
-  not continuous piecewise-linear: use a semi-continuous column or a binary.
+- **Breakpoints out of order.** List them in increasing `x` (`add_pwl` raises `RS4009` otherwise).
+  A repeated `x` is a jump, which the object allows; for a fixed charge a semi-continuous column
+  or an indicator states the intent better.
 - **Reading a gc model with `classify`.** `rusolve classify` refuses general constraints and says
   so; use `rusolve mip --format json` (the `class` field) instead.
 

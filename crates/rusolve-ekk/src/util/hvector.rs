@@ -60,6 +60,52 @@ unsafe impl Send for HVectorNext {}
 // SAFETY: as above; sharing the address does not dereference it.
 unsafe impl Sync for HVectorNext {}
 
+/// Recycled `HVector` storage (not in HiGHS; perf only). HiGHS builds its scratch vectors
+/// (`computeDual`, `computePrimal`, `factorSolveError`, the `HEkkDual` members, ...) afresh on
+/// every LP solve, so a MIP search with tens of thousands of small node LPs spends a visible
+/// share of its time in their allocation and release. [`HVectorPool::take`] hands out a vector
+/// whose state equals `HVector::default()` (every buffer empty) but whose buffers keep the
+/// capacity of an earlier use, so the `setup` that follows yields exactly the values a fresh
+/// vector would get, without the allocations. [`HVectorPool::give`] returns a vector.
+#[derive(Clone, Debug, Default)]
+pub struct HVectorPool {
+    free: Vec<HVector>,
+}
+
+impl HVectorPool {
+    /// Most vectors live at the same time: the seven `HEkkDual` members plus two scratch.
+    const KEEP: usize = 12;
+
+    /// A vector equal to `HVector::default()`, with recycled capacity when available.
+    #[inline]
+    pub fn take(&mut self) -> HVector {
+        let v = self.free.pop().unwrap_or_default();
+        debug_assert!(v == HVector::default());
+        v
+    }
+
+    /// Returns `v` to the pool, reset to the `HVector::default()` state.
+    #[inline]
+    pub fn give(&mut self, mut v: HVector) {
+        if self.free.len() >= Self::KEEP {
+            return;
+        }
+        v.size = 0;
+        v.count = 0;
+        v.index.clear();
+        v.array.clear();
+        v.synthetic_tick = 0.0;
+        v.cwork.clear();
+        v.iwork.clear();
+        v.pack_flag = false;
+        v.pack_count = 0;
+        v.pack_index.clear();
+        v.pack_value.clear();
+        v.next = None;
+        self.free.push(v);
+    }
+}
+
 /// HiGHS: HVector.h `HVector_ptr` (= `HVector*`). In Rust a pointer
 /// parameter is `&mut HVector`; this alias exists only for documentation.
 pub type HVectorPtr<'a> = &'a mut HVector;
@@ -73,10 +119,14 @@ impl HVector {
         self.index.resize(size_ as usize, 0);
         self.array.clear();
         self.array.resize(size_ as usize, 0.0);
+        // PORT NOTE (perf): C++ assigns `cwork` (size + 6400 zeros) and `iwork` (4 * size
+        // zeros) here. Only the hyper-sparse solve and the product-form FTRAN use them, so
+        // they are emptied here and sized to the same lengths, zero-filled, on first use
+        // (`work_buffers`). Both users return `cwork` to all zeros and write `iwork` before
+        // reading it, so every read sees the values the C++ would. Most vectors set up per
+        // LP solve never reach those paths and now skip the ~6.4 kB fill and two allocations.
         self.cwork.clear();
-        self.cwork.resize((size_ + 6400) as usize, 0);
         self.iwork.clear();
-        self.iwork.resize((size_ * 4) as usize, 0);
 
         self.pack_count = 0;
         self.pack_index.resize(size_ as usize, 0);
@@ -85,6 +135,21 @@ impl HVector {
         self.pack_flag = false;
         self.synthetic_tick = 0.0;
         self.next = None;
+    }
+
+    /// The `cwork` / `iwork` buffers at the lengths C++ `setup` gives them
+    /// (`size + 6400` and `4 * size`), zero-filled when first needed after `setup`.
+    #[inline]
+    pub fn work_buffers(&mut self) -> (&mut Vec<i8>, &mut Vec<HighsInt>) {
+        let c_len = (self.size + 6400) as usize;
+        if self.cwork.len() < c_len {
+            self.cwork.resize(c_len, 0);
+        }
+        let i_len = (self.size * 4) as usize;
+        if self.iwork.len() < i_len {
+            self.iwork.resize(i_len, 0);
+        }
+        (&mut self.cwork, &mut self.iwork)
     }
 
     /// HiGHS: HVectorBase.cpp::HVectorBase::clear (lines 47-64)

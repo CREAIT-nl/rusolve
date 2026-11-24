@@ -278,6 +278,21 @@ impl HighsMipSolver {
                 c_fmt_g(s.shiftprop_s, 4)
             );
         }
+        if self.options_mip_.mip_node_rounding > 0 && !self.submip {
+            let s = &self.stats_;
+            crate::highs_log_user!(
+                opts,
+                HighsLogType::kInfo,
+                "  Node rounding     {} calls, {} / {} / {} found (simple / rounding / shifting), {} polished, {} improving, {} s\n",
+                s.noderound_calls,
+                s.noderound_found[0],
+                s.noderound_found[1],
+                s.noderound_found[2],
+                s.noderound_polished,
+                s.noderound_improving,
+                c_fmt_g(s.noderound_s, 4)
+            );
+        }
         if self.options_mip_.mip_alns && !self.submip {
             let s = &self.stats_;
             crate::highs_log_user!(

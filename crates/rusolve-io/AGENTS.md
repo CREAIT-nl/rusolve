@@ -6,6 +6,7 @@ File formats: readers and writers that turn a model file into a `Model`, plus th
 - `src/lib.rs`: `read_model_file` and friends: decompression by magic bytes (gzip, bzip2, xz, zstd), then reader choice by extension or content sniff.
 - `src/mps.rs` (MPS reader and writer), `src/lp.rs` and `src/lp_write.rs` (CPLEX LP), `src/nl.rs` (AMPL), `src/mof.rs` (MathOptFormat JSON).
 - `src/gc.rs`, `src/gc_lin.rs`, `src/conic.rs`: general constraints (indicator, SOS, piecewise) and conic sections.
+- `src/cp.rs`, `src/cp_lin.rs`: scheduling and combinatorial objects (interval, no-overlap, cumulative, all-different, element, table): types, validation, the checker `CpModel::check`, and the MIP linearization fallback (`docs/design/cp-model.md`). The checker evaluates the user's objects, never the derived rows; a new object kind needs a type, `validate`, `check`, a linearization route (or a typed `Unsupported`) and a test of each.
 - `src/model.rs`: the `Model` type that all readers produce.
 - `examples/model_json.rs`; `tests/` with `dialects/`, `compressed/`, `cplex_lp/`, `mof/`, `nl/` corpora.
 

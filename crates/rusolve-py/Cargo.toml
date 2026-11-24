@@ -15,6 +15,8 @@ rusolve-core.workspace = true
 rusolve-io.workspace = true
 rusolve-model.workspace = true
 rusolve-ekk.workspace = true
+# the OR-Tools loader (`cpsat_info`, where to look for the `ortools` package)
+rusolve-cpsat.workspace = true
 # The diagnostic cores and the result envelope (`rusolve_cli::api`)
 rusolve-cli = { path = "../rusolve-cli" }
 serde = "1"

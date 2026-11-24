@@ -139,6 +139,8 @@ jobs:
           pattern: dist-*
           merge-multiple: true
           path: artifacts
+      - name: Checksums of every release file (install.sh checks the CLI archives against them)
+        run: (cd artifacts && sha256sum -- * > ../SHA256SUMS) && mv SHA256SUMS artifacts/
       - name: Create the GitHub release as a draft
         env:
           GH_TOKEN: ${{ github.token }}

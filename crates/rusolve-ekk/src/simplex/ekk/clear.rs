@@ -286,6 +286,20 @@ impl HEkk {
     pub fn update_status(&mut self, action: LpAction) {
         debug_assert!(!self.status_.is_dualized);
         debug_assert!(!self.status_.is_permuted);
+        // rusolve lever `mip_lp_keep_dse_weights` (not in HiGHS, dse_keep.rs): save the dual
+        // steepest-edge weights by variable before a basis or row change drops them. Row
+        // deletion saves and renumbers in `delete_rows`; a change of columns or scaling drops
+        // the save.
+        if self.options_.mip_lp_keep_dse_weights > 0 {
+            match action {
+                LpAction::kNewBasis | LpAction::kNewRows => self.dse_keep_save(),
+                LpAction::kNewCosts
+                | LpAction::kNewBounds
+                | LpAction::kDelRows
+                | LpAction::kBacktracking => {}
+                _ => self.dse_keep_drop(),
+            }
+        }
         match action {
             LpAction::kScale => {
                 self.invalidate_basis_matrix();

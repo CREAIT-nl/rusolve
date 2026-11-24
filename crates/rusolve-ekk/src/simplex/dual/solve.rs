@@ -173,7 +173,12 @@ impl HEkkDual {
                             HighsLogType::kDetailed,
                             "Basis is not logical, so compute steepest edge weights\n"
                         );
-                        ekk.compute_dual_steepest_edge_weights(true);
+                        // rusolve lever `mip_lp_keep_dse_weights` (not in HiGHS): take the
+                        // weights saved by variable before the last basis or row change and
+                        // compute only the missing ones (simplex/ekk/dse_keep.rs).
+                        if !ekk.dse_keep_apply() {
+                            ekk.compute_dual_steepest_edge_weights(true);
+                        }
                         ekk.status_.has_dual_steepest_edge_weights = true;
                     }
                 }

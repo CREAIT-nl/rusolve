@@ -54,6 +54,16 @@ struct Model {
     /// A model the router sends to an engine other than the LP/MIP port (a convex QP, a
     /// conic model, general constraints). `highs` is then an empty placeholder.
     routed: Option<Routed>,
+    /// Scheduling and combinatorial (CP) objects from `build_model`'s `cp` section. No file format
+    /// carries them, so the handle keeps them; `highs` holds the user's model and `solve` runs
+    /// the CP path (`cp_solve.rs`) in this process.
+    cp: Option<rusolve_io::CpModel>,
+    /// The last CP solve: the solver (its solution cut to the user's columns) and the `cp` report.
+    cp_result: Option<CpResult>,
+}
+
+struct CpResult {
+    highs: Highs,
 }
 
 /// A handle whose class `rusolve solve` routes to another engine (`route.rs`).
@@ -251,9 +261,40 @@ impl Registry {
     /// A model an agent writes as JSON, through the same reader as a loaded one
     /// (`mcp_build.rs`).
     fn build_model(&mut self, args: &Args) -> ToolResult {
-        only_fields(args, &["name", "sense", "variables", "rows", "objective"])?;
+        only_fields(
+            args,
+            &["name", "sense", "variables", "rows", "objective", "cp"],
+        )?;
         let mps = crate::mcp_build::to_mps(args)?;
-        self.load_text(&mps, "mps", "build_model")
+        let cp = crate::mcp_build::parse_cp(args)?.filter(|k| !k.is_empty());
+        let mut summary = self.load_text(&mps, "mps", "build_model")?;
+        let Some(cp) = cp else {
+            return Ok(summary);
+        };
+        // The objects are checked against the model as written: every column integer with finite
+        // bounds, presence binary, sizes nonnegative. A bad one frees the handle again.
+        let id = summary["model_id"].as_str().unwrap_or_default().to_string();
+        let m = self.models.get_mut(&id).expect("just registered");
+        if let Err(e) = crate::cp_solve::validate(&m.highs.model_lp_, &cp) {
+            let at = crate::mcp_build::cp_error_path(&cp, &e.object).unwrap_or_else(|| "cp".into());
+            let msg = format!("{at}: RS4011: {e}");
+            if let Some(t) = self.models.remove(&id).and_then(|m| m.temp) {
+                let _ = std::fs::remove_file(t);
+            }
+            return Err(msg);
+        }
+        let engine = crate::cp_solve::select_engine(&cp, &m.highs.options_).name();
+        let counts: serde_json::Map<String, Value> = cp
+            .counts()
+            .iter()
+            .filter(|(_, n)| *n > 0)
+            .map(|(k, n)| (k.to_string(), json!(n)))
+            .collect();
+        m.cp = Some(cp);
+        summary["class"] = json!("cp");
+        summary["engine"] = json!(engine);
+        summary["cp_objects"] = Value::Object(counts);
+        Ok(summary)
     }
 
     /// Reads `source_path`, classifies it (router), and keeps a handle: a live `Highs` for an
@@ -281,7 +322,11 @@ impl Registry {
             let verdict = crate::route::classify_model(&model);
             let class = verdict.class;
             if !matches!(class, Class::Lp | Class::Mip) {
-                let Some(engine) = class.engine() else {
+                // A convex MIQP and a mixed-integer conic model load as routed handles: their
+                // engine (`oa`) runs only when `solve` is given the lever in `options`.
+                let oa_class = matches!(class, Class::MiConic)
+                    || (class == Class::Miqp && verdict.convex_miqp);
+                let Some(engine) = class.engine().or(oa_class.then_some("oa")) else {
                     return Err(fail(
                         &temp,
                         format!(
@@ -317,6 +362,8 @@ impl Registry {
                             status: None,
                             objective: None,
                         }),
+                        cp: None,
+                        cp_result: None,
                     },
                 );
                 return Ok(summary);
@@ -356,6 +403,8 @@ impl Registry {
                 edits_applied: 0,
                 solved: false,
                 routed: None,
+                cp: None,
+                cp_result: None,
             },
         );
         Ok(summary)
@@ -594,6 +643,15 @@ fn linear_only(
                 r.class.engine().unwrap_or("router"),
             ));
         }
+        // a model with CP objects: only `check_solution` evaluates them; the others would work
+        // on the plain rows and silently ignore the objects
+        if tool != "check_solution"
+            && let Some(o) = m.cp.as_ref().and_then(|k| k.first_object())
+        {
+            return Err(format!(
+                "model_id: RS4012: '{id}' has scheduling or combinatorial objects (first: {o}); {tool} would ignore them. solve, get_solution, check_solution and free_model support them"
+            ));
+        }
         f(id, m, args)
     }
 }
@@ -644,6 +702,33 @@ fn solve_routed(_id: &str, m: &mut Model, args: &Args, ctx: &Ctx) -> ToolResult 
     use std::io::Read;
     use std::process::{Command, Stdio};
     let class = m.routed.as_ref().expect("routed handle").class;
+    // `options` on a convex MIQP or mixed-integer conic handle: only the outer-approximation
+    // levers (`miqp_oa*`, `misocp_oa*`), handed to the child as RUSOLVE_EKK_OPTS.
+    let oa_class = matches!(
+        class,
+        crate::route::Class::Miqp | crate::route::Class::MiConic
+    );
+    let mut oa_opts: Vec<String> = Vec::new();
+    if oa_class && let Some(o) = args.get("options") {
+        let map = o
+            .as_object()
+            .ok_or_else(|| "options: must be an object {option name: value}".to_string())?;
+        for (k, v) in map {
+            if !(k.starts_with("miqp_oa") || k.starts_with("misocp_oa")) {
+                return Err(format!(
+                    "options.{k}: a {} model takes only the miqp_oa* / misocp_oa* options here",
+                    class.name()
+                ));
+            }
+            let val = match v {
+                Value::Bool(b) => b.to_string(),
+                Value::Number(n) => n.to_string(),
+                Value::String(s) if !s.contains(',') => s.clone(),
+                _ => return Err(format!("options.{k}: must be a boolean, number or string")),
+            };
+            oa_opts.push(format!("{k}={val}"));
+        }
+    }
     for k in [
         "options",
         "warm_start",
@@ -651,7 +736,7 @@ fn solve_routed(_id: &str, m: &mut Model, args: &Args, ctx: &Ctx) -> ToolResult 
         "wasm_fuel",
         "wasm_memory",
     ] {
-        if args.contains_key(k) {
+        if args.contains_key(k) && !(k == "options" && oa_class) {
             return Err(format!(
                 "{k}: not supported on a {} model (the {} engine takes time_limit and include_solution)",
                 class.name(),
@@ -674,6 +759,12 @@ fn solve_routed(_id: &str, m: &mut Model, args: &Args, ctx: &Ctx) -> ToolResult 
         .args(["--format", "json", "--include-solution"]);
     if let Some(t) = time_limit {
         cmd.args(["--time-limit", &t.to_string()]);
+    }
+    if oa_class {
+        // an explicit `options` replaces the inherited setting; none leaves the environment alone
+        if !oa_opts.is_empty() {
+            cmd.env("RUSOLVE_EKK_OPTS", oa_opts.join(","));
+        }
     }
     let mut child = cmd
         .stdin(Stdio::null())
@@ -764,6 +855,91 @@ fn solve_routed(_id: &str, m: &mut Model, args: &Args, ctx: &Ctx) -> ToolResult 
     Ok(env)
 }
 
+/// `solve` on a handle with CP objects (`cp_solve.rs`): in this process, the answer checked on the
+/// user's objects. `options` and `time_limit` go to the HiGHS port that solves the linearization.
+fn solve_cp(_id: &str, m: &mut Model, args: &Args, ctx: &Arc<Ctx>) -> ToolResult {
+    for k in ["warm_start", "wasm_hook", "wasm_fuel", "wasm_memory"] {
+        if args.contains_key(k) {
+            return Err(format!(
+                "{k}: not supported on a model with CP objects (solve takes options, time_limit and include_solution)"
+            ));
+        }
+    }
+    let mut settings: Vec<(String, String)> = Vec::new();
+    if let Some(opts) = opt_object(args, "options")? {
+        for (k, v) in opts {
+            let shown = apply_option(&mut m.highs, k, v)?;
+            settings.push((k.clone(), shown));
+        }
+    }
+    if let Some(t) = opt_f64(args, "time_limit")? {
+        if t < 0.0 {
+            return Err(format!("time_limit: must be >= 0, got {t}"));
+        }
+        m.highs.set_option_value_double("time_limit", t);
+        settings.push(("time_limit".into(), t.to_string()));
+    }
+    let include_solution = opt_bool(args, "include_solution")?.unwrap_or(false);
+    m.highs.set_option_value_bool("log_to_console", false);
+    let options = m.highs.get_options().clone();
+    let user_lp = m.highs.model_lp_.clone();
+    let cp = m.cp.clone().expect("cp handle");
+    let start = Instant::now();
+    m.solved = false;
+    m.cp_result = None;
+    let run_ctx = ctx.clone();
+    let solved = crate::cp_solve::solve_with(user_lp, cp, options, move |h| {
+        install_callbacks(h, &run_ctx);
+        let r = h.run();
+        h.stop_callback(kCallbackMipInterrupt);
+        h.stop_callback(kCallbackSimplexInterrupt);
+        r
+    })
+    .map_err(|e| {
+        let d = e.diagnostic();
+        format!("{}: {e}", d.code)
+    })?;
+    let time_s = start.elapsed().as_secs_f64();
+    m.solved = solved.run != HighsStatus::kError;
+    let h = &solved.highs;
+    let opts = h.get_options();
+    let env_in = envelope::Solved {
+        path: &m.source_path,
+        lp: &solved.user_lp,
+        status: h.get_model_status(),
+        run_status: solved.run,
+        info: h.get_info(),
+        solution: &h.solution_,
+        time_s,
+        seed: opts.random_seed,
+        threads: opts.threads,
+        time_limit: opts.time_limit,
+        node_limit: None,
+        mip_max_nodes: opts.mip_max_nodes,
+        options: &settings,
+        include_solution,
+        mip_stats: h.mip_stats_.as_ref(),
+        wasm: None,
+    };
+    let mut env = serde_json::to_value(envelope::envelope(&env_in))
+        .map_err(|e| format!("internal error: cannot serialise the result: {e}"))?;
+    if env["stats"]["nodes"].as_i64().is_some_and(|n| n < 0) {
+        env["stats"]["nodes"] = json!(0);
+    }
+    env["class"] = json!("cp");
+    env["engine"] = json!(solved.engine);
+    env["cp"] = solved.report.clone();
+    if let Some(cps) = solved.report.get("cpsat") {
+        env["cpsat"] = cps.clone();
+    }
+    let input = env["input"].as_object_mut().expect("envelope.input");
+    input.insert("edits_applied".into(), json!(m.edits_applied));
+    m.cp_result = Some(CpResult {
+        highs: solved.highs,
+    });
+    Ok(env)
+}
+
 fn solve(id: &str, m: &mut Model, args: &Args, ctx: &Arc<Ctx>) -> ToolResult {
     only_fields(
         args,
@@ -781,6 +957,9 @@ fn solve(id: &str, m: &mut Model, args: &Args, ctx: &Arc<Ctx>) -> ToolResult {
     if m.routed.is_some() {
         return solve_routed(id, m, args, ctx);
     }
+    if m.cp.is_some() {
+        return solve_cp(id, m, args, ctx);
+    }
     let mut settings: Vec<(String, String)> = Vec::new();
     if let Some(opts) = opt_object(args, "options")? {
         for (k, v) in opts {
@@ -797,6 +976,12 @@ fn solve(id: &str, m: &mut Model, args: &Args, ctx: &Arc<Ctx>) -> ToolResult {
     }
     let include_solution = opt_bool(args, "include_solution")?.unwrap_or(false);
     let warm = opt_bool(args, "warm_start")?.unwrap_or(true);
+    // `options: {"mip_engine": "cpsat"}` (docs/design/cpsat-engine.md) replaces the solve below
+    // with CP-SAT; a Wasm hook is a tool error, and so is a missing OR-Tools library (RS0012)
+    let cpsat = crate::cpsat_solve::selected(&m.highs).map_err(|e| format!("options: {e}"))?;
+    if cpsat && args.contains_key("wasm_hook") {
+        return Err("wasm_hook: not supported with mip_engine=cpsat".into());
+    }
     // Keep stdout for the protocol whatever the options said.
     m.highs.set_option_value_bool("log_to_console", false);
     if !warm {
@@ -829,7 +1014,22 @@ fn solve(id: &str, m: &mut Model, args: &Args, ctx: &Arc<Ctx>) -> ToolResult {
     // Cancel and progress ride on the port's interrupt callbacks for this solve only; they
     // read, never steer, the search (no callback means the unmodified run).
     install_callbacks(&mut m.highs, ctx);
-    let run_status = m.highs.run();
+    let mut cpsat_report = None;
+    let run_status = if cpsat {
+        match crate::cpsat_solve::run(&mut m.highs, &m.source_path) {
+            Ok(report) => {
+                cpsat_report = Some(report);
+                HighsStatus::kOk
+            }
+            Err(f) => {
+                m.highs.stop_callback(kCallbackMipInterrupt);
+                m.highs.stop_callback(kCallbackSimplexInterrupt);
+                return Err(f.message());
+            }
+        }
+    } else {
+        m.highs.run()
+    };
     m.highs.stop_callback(kCallbackMipInterrupt);
     m.highs.stop_callback(kCallbackSimplexInterrupt);
     m.highs.clear_mip_hooks();
@@ -866,6 +1066,10 @@ fn solve(id: &str, m: &mut Model, args: &Args, ctx: &Arc<Ctx>) -> ToolResult {
     // clamped so structuredContent validates against its outputSchema.
     if env["stats"]["nodes"].as_i64().is_some_and(|n| n < 0) {
         env["stats"]["nodes"] = json!(0);
+    }
+    if let Some(report) = cpsat_report {
+        env["engine"] = json!(crate::cpsat_solve::ENGINE);
+        env["cpsat"] = report;
     }
     let input = env["input"].as_object_mut().expect("envelope.input");
     input.insert("edits_applied".into(), json!(m.edits_applied));
@@ -912,13 +1116,15 @@ fn get_solution(id: &str, m: &mut Model, args: &Args) -> ToolResult {
     if let Some(r) = &m.routed {
         return get_solution_routed(id, r, m.solved, &names, offset, limit);
     }
-    if !m.solved || !m.highs.solution_.value_valid {
+    // a CP handle: the solution is the solver's after the CP solve (cut to the user's columns);
+    // names and counts come from the user's model
+    let h = m.cp_result.as_ref().map_or(&m.highs, |r| &r.highs);
+    if !m.solved || !h.solution_.value_valid {
         return Err(format!(
             "model_id: model '{id}' has no solution (never solved, edited since the last solve, or the last solve found no primal solution); call solve first"
         ));
     }
-    let h = &m.highs;
-    let lp = &h.model_lp_;
+    let lp = &m.highs.model_lp_;
     let col_name = |j: usize| {
         lp.col_names_
             .get(j)
@@ -1363,8 +1569,17 @@ fn check_solution(id: &str, m: &mut Model, args: &Args) -> ToolResult {
         mip_feasibility_tolerance: mip,
         applied: if lp.is_mip() { mip } else { primal },
     };
-    let report = check::check_solution(lp, &values, tol, max_findings, &m.display(id), "<inline>")
-        .map_err(|e| format!("solution: {}", e.0))?;
+    let report = check::check_solution_objects(
+        lp,
+        None,
+        m.cp.as_ref(),
+        &values,
+        tol,
+        max_findings,
+        &m.display(id),
+        "<inline>",
+    )
+    .map_err(|e| format!("solution: {}", e.0))?;
     serde_json::to_value(report).map_err(|e| format!("internal error: {e}"))
 }
 
@@ -1577,7 +1792,7 @@ fn tool_defs() -> Vec<Value> {
         tool(
             "load_model",
             "Load a model",
-            "Load a model and return a model_id handle with its size, name summary, class and engine. Every other tool takes the model_id. Give exactly one of path, mps_text, lp_text (CPLEX LP format) or mof_text (MathOptFormat JSON). LP and MIP models get the full tool set. Convex QP, SOCP/QCQP and general-constraint models (indicator, SOS, piecewise-linear, min/max/abs/and/or, semi-continuous) are routed to their engine and support solve, get_solution and free_model. A class nothing solves (nonconvex, MIQP, mixed-integer conic) is refused with the class and the reason.",
+            "Load a model and return a model_id handle with its size, name summary, class and engine. Every other tool takes the model_id. Give exactly one of path, mps_text, lp_text (CPLEX LP format) or mof_text (MathOptFormat JSON). LP and MIP models get the full tool set. Convex QP, SOCP/QCQP and general-constraint models (indicator, SOS, piecewise-linear, min/max/abs/and/or, semi-continuous) are routed to their engine and support solve, get_solution and free_model. Convex MIQP and mixed-integer conic models load too, but solve runs their experimental outer-approximation engine only with options {\"miqp_oa\": true} or {\"misocp_oa\": true} (off by default: slower), and otherwise refuses with that hint. A class nothing solves (nonconvex Q, nonconvex quadratic rows, general constraints with quadratic terms) is refused with the class and the reason.",
             input(
                 json!({
                     "path": {"type": "string", "description": "Path of a model file: MPS, LP, AMPL .nl or MathOptFormat .mof.json, optionally .gz/.bz2/.xz/.zst."},
@@ -1598,8 +1813,8 @@ fn tool_defs() -> Vec<Value> {
                     "integer_cols": {"type": "integer", "minimum": 0},
                     "nonzeros": {"type": "integer", "minimum": 0},
                     "sense": {"enum": ["minimize", "maximize"]},
-                    "class": {"type": "string", "description": "The router's problem class: lp, mip, convex_qp, conic, gc, gc_mip."},
-                    "engine": {"type": "string", "description": "The engine that solves the class: highs-port, hipo (QP), clarabel (conic), gc-linearization."},
+                    "class": {"type": "string", "description": "The router's problem class: lp, mip, convex_qp, conic, gc, gc_mip, miqp, mi_conic."},
+                    "engine": {"type": "string", "description": "The engine that solves the class: highs-port, hipo (QP), clarabel (conic), gc-linearization, oa (outer approximation, MIQP and mixed-integer conic, lever off by default)."},
                     "names": {
                         "type": "object",
                         "required": ["rows", "cols"],
@@ -1612,7 +1827,7 @@ fn tool_defs() -> Vec<Value> {
         tool(
             "build_model",
             "Build a model from JSON",
-            "Build an LP/MIP from JSON, no file needed, and return a model_id like load_model. variables: [{name, type? continuous|integer|binary, lower?, upper?, objective?}] (bounds default 0 and infinity, null is infinite). rows: [{name, terms: {variable: coefficient}, then either sense (<=, >=, =) with rhs, or lower and/or upper}]. objective: {terms?: {variable: coefficient}, offset?} adds to the per-variable objective. sense is minimize (default) or maximize. A bad entry is an error naming its JSON path, for example rows[2].terms.z. For a quadratic or general-constraint model write LP text and use load_model.",
+            "Build an LP/MIP from JSON, no file needed, and return a model_id like load_model. An optional cp section adds scheduling and combinatorial objects (class cp): intervals [{name, start, size, end, presence?}], no_overlap [{name, intervals}], cumulative [{name, intervals, demands, capacity}], all_different [{name, variables}], element [{name, index, values, target}], table [{name, variables, tuples, negated?}]. Every variable a cp object names (start, end, presence, index, target, variables) must be declared in variables, type integer (binary for presence), with both bounds finite: upper defaults to infinity, so write it. An interval does not create its end: declare the end variable and name it; start, size and end are all required (only presence is optional). size, demands, values and capacity take an integer (a JSON number without a fraction, so 3 not 3.0) or a variable name; a size or demand must be nonnegative. no_overlap and cumulative name intervals by their interval name, not by variable. The reply is the handle summary; its model_id is in structuredContent and in the JSON text of content[0].text. solve checks the answer on these objects (envelope cp.verified); modify, explain, lint, ranging and feasrelax refuse such a model (RS4012). variables: [{name, type? continuous|integer|binary, lower?, upper?, objective?}] (bounds default 0 and infinity, null is infinite). rows: [{name, terms: {variable: coefficient}, then either sense (<=, >=, =) with rhs, or lower and/or upper}]. objective: {terms?: {variable: coefficient}, offset?} adds to the per-variable objective. sense is minimize (default) or maximize. A bad entry is an error naming its JSON path, for example rows[2].terms.z. For a quadratic or general-constraint model write LP text and use load_model.",
             input(
                 json!({
                     "name": {"type": "string", "description": "Model name (no whitespace)."},
@@ -1657,6 +1872,19 @@ fn tool_defs() -> Vec<Value> {
                             "offset": {"type": "number"},
                         },
                     },
+                    "cp": {
+                        "type": "object",
+                        "description": "Scheduling and combinatorial objects. Every variable they name must be declared in variables as an integer (binary for presence) with finite lower and upper bounds. Variables and intervals are named by string.",
+                        "additionalProperties": false,
+                        "properties": {
+                            "intervals": {"type": "array", "items": {"type": "object", "description": "{name, start, size, end, presence?}: start and end are required names of declared integer variables with finite bounds (the interval does not create them); size is an integer or a variable name (nonnegative); presence is an optional binary variable. start + size = end when present."}},
+                            "no_overlap": {"type": "array", "items": {"type": "object", "description": "{name, intervals: [interval names]}"}},
+                            "cumulative": {"type": "array", "items": {"type": "object", "description": "{name, intervals, demands (numbers or variables, one per interval), capacity (number or variable)}"}},
+                            "all_different": {"type": "array", "items": {"type": "object", "description": "{name, variables}"}},
+                            "element": {"type": "array", "items": {"type": "object", "description": "{name, index (variable, 0-based), values (numbers or variables), target (variable)}"}},
+                            "table": {"type": "array", "items": {"type": "object", "description": "{name, variables, tuples: [[int,...]], negated?}"}},
+                        },
+                    },
                 }),
                 &["variables"],
             ),
@@ -1685,7 +1913,7 @@ fn tool_defs() -> Vec<Value> {
         tool(
             "solve",
             "Solve a model",
-            "Solve the model handle (progress notifications with a progressToken, notifications/cancelled stops it) and return the rusolve.result/1 envelope (status, objective, dual bound, gap, stats.lp_iterations, run settings). After modify an LP re-solves from the kept basis (warm); set warm_start false to force a cold solve. Option values persist on the handle. With wasm_hook, a fuel-metered WebAssembly component scores branching and cuts and picks open nodes for this solve only; its counters appear as stats.wasm.",
+            "Solve the model handle (progress notifications with a progressToken, notifications/cancelled stops it) and return the rusolve.result/1 envelope (status, objective, dual bound, gap, stats.lp_iterations, run settings). After modify an LP re-solves from the kept basis (warm); set warm_start false to force a cold solve. Option values persist on the handle. On a convex MIQP or mixed-integer conic handle, options takes only {\"miqp_oa\": true} or {\"misocp_oa\": true} (experimental, off by default). With wasm_hook, a fuel-metered WebAssembly component scores branching and cuts and picks open nodes for this solve only; its counters appear as stats.wasm. options {\"mip_engine\": \"cpsat\"} solves an all-integer model, with or without CP objects, with OR-Tools CP-SAT when its library is installed (`rusolve version --format json` shows cpsat.available; a missing library is RS0012 naming the install routes); the answer is checked on your model and objects, and the envelope has a cpsat object.",
             input(
                 with_id(json!({
                     // The option names and types come from the option registry

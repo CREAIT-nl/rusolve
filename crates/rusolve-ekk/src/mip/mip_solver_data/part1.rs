@@ -145,6 +145,8 @@ impl HighsMipSolver {
             ("O", "Proximity")
         } else if solution_source == kSolutionSourceLocalBranching {
             ("K", "Local branching")
+        } else if solution_source == kSolutionSourceNodeRounding {
+            ("D", "Node rounding")
         } else {
             println!(
                 "HighsMipSolverData::solutionSourceToString: Unknown source = {}",

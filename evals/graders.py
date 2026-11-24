@@ -226,11 +226,15 @@ def grade_add_cuts(ans):
 
 # ------------------------------------------------------------------ extend_wasm
 
-# The reference rule (selfcheck/reference_depth_first.wat) reaches 534 nodes against 912 for the
-# default best-bound pop, so 0.8 leaves room; a component with no opinion leaves the tree at
-# exactly the default 912 and fails. Measured numbers are in the task's section of README.md.
+# Both solves use the HiGHS child rule (mip_child_selection=-1): the default hybrid rule dives so
+# much that the open-node queue is consulted only about a dozen times, which leaves a node-selection
+# rule almost nothing to decide. Under the HiGHS rule the reference (selfcheck/reference_depth_first.wat)
+# reaches 534 nodes against 912 for the best-bound pop, so 0.8 leaves room; a component with no
+# opinion leaves the tree at exactly 912 and fails. Measured numbers are in the task's section of
+# README.md.
 EXTEND_NODE_FACTOR = 0.8
 EXTEND_OBJ_TOL = 1e-6
+EXTEND_OPTIONS = {"mip_child_selection": -1}
 
 
 def grade_extend_wasm(ans):
@@ -240,9 +244,9 @@ def grade_extend_wasm(ans):
         return False, "answer needs 'component_path', the path of the component it wrote"
     if not os.path.isfile(path):
         return False, f"no component file at {path!r}"
-    base = rs.mip(model)
+    base = rs.mip(model, EXTEND_OPTIONS)
     try:
-        run = rs.mip(model, wasm_hook=path)  # a component rusolve cannot load exits 3 -> failure
+        run = rs.mip(model, EXTEND_OPTIONS, wasm_hook=path)  # a component rusolve cannot load exits 3 -> failure
     except RuntimeError as e:
         return False, f"rusolve would not run the component: {e}"
     if run["status"] != "Optimal":
@@ -264,8 +268,8 @@ def grade_extend_wasm(ans):
     n0, n1 = base["stats"]["nodes"], run["stats"]["nodes"]
     if n1 > EXTEND_NODE_FACTOR * n0:
         return False, (f"{n1} nodes with the component vs {n0} without: needs at most "
-                       f"{EXTEND_NODE_FACTOR:.0%} of the default")
-    return True, (f"{n1} nodes vs {n0} default, {w['ok']}/{w['calls']} calls answered, "
+                       f"{EXTEND_NODE_FACTOR:.0%} of the solve without it")
+    return True, (f"{n1} nodes vs {n0} without it, {w['ok']}/{w['calls']} calls answered, "
                   f"objective {t} unchanged")
 
 
@@ -278,12 +282,16 @@ PLAYBOOK = {
     "class_scheduling": "rusolve-scheduling", "class_lotsizing": "rusolve-lot-sizing",
     "class_facility": "rusolve-facility-location", "class_routing": "rusolve-routing",
     "class_pwl_semi": "rusolve-piecewise-semi", "class_qp": "rusolve-convex-qp",
+    "class_conic": "rusolve-conic", "class_miqp": "rusolve-convex-qp", "class_misocp": "rusolve-conic",
 }
+# The two mixed-integer classes are refused by default; their experimental engine is a lever, and the
+# truth is what rusolve answers with the lever on (the refusal message names it).
+LEVER = {"class_miqp": {"miqp_oa": True}, "class_misocp": {"misocp_oa": True}}
 TSP_PTS = [(0, 0), (4, 1), (7, 5), (3, 8), (-2, 5), (-3, 1)]   # gen_models.class_routing
 
 
 def _class_truth(tid):
-    return rs.mip(os.path.join(task_dir(tid), "model.lp"))
+    return rs.mip(os.path.join(task_dir(tid), "model.lp"), options=LEVER.get(tid))
 
 
 def _class_common(tid, ans, truth, tol=1e-6):
@@ -395,6 +403,51 @@ def grade_class_qp(ans):
     return True, f"{truth['class']} objective {truth['objective']:.6g} and weights match"
 
 
+def _values(ans, truth, names, tol):
+    """`values` (a name -> number map) matches rusolve's solution on `names`; an error string or None."""
+    want = {c["name"]: c["value"] for c in truth["solution"]["columns"]}
+    v = ans.get("values")
+    if not isinstance(v, dict) or not all(_num(v.get(n)) for n in names):
+        return f"'values' must map {', '.join(names)} to numbers"
+    for n in names:
+        if abs(v[n] - want[n]) > tol:
+            return f"{n} = {v[n]}, rusolve's solution has {want[n]:.4f}"
+    return None
+
+
+def _grade_class_values(tid, ans):
+    truth = _class_truth(tid)
+    err = (_class_common(tid, ans, truth, tol=1e-4) or _class_field(ans, truth, "class", "engine")
+           or _values(ans, truth, "abc", 2e-3))
+    return (False, err) if err else (True, f"{truth['class']}/{truth['engine']} objective {truth['objective']:.6g} and values match")
+
+
+def grade_class_conic(ans):
+    return _grade_class_values("class_conic", ans)
+
+
+def grade_class_misocp(ans):
+    return _grade_class_values("class_misocp", ans)
+
+
+def grade_class_miqp(ans):
+    truth = _class_truth("class_miqp")
+    err = _class_common("class_miqp", ans, truth, tol=1e-4) or _class_field(ans, truth, "class", "engine")
+    if err:
+        return False, err
+    cols = {c["name"]: c["value"] for c in truth["solution"]["columns"]}
+    w = ans.get("weights")
+    if not isinstance(w, list) or len(w) != 4 or not all(_num(v) for v in w):
+        return False, "'weights' must be a list of four numbers"
+    for i, v in enumerate(w):
+        if abs(v - cols[f"w{i}"]) > 2e-3:
+            return False, f"w{i} = {v}, rusolve's solution has {cols[f'w{i}']:.4f}"
+    held = sorted(n for n, v in cols.items() if n.startswith("y") and v > 0.5)
+    if sorted(ans.get("held") or []) != held:
+        return False, f"held {ans.get('held')!r}, rusolve's solution holds {held}"
+    return True, f"{truth['class']}/{truth['engine']} objective {truth['objective']:.6g}, held {held}"
+
+
 ROUTER_MODELS = {"m1": "class_flow", "m2": "class_cover", "m3": "class_qp", "m4": "class_pwl_semi"}
 
 
@@ -420,11 +473,21 @@ def grade_class_router(ans):
 # grading time. The agent's reported plan is then judged against that model with rusolve's own
 # `check`, so a plan that breaks a stated rule fails even when its objective looks right.
 
-WORD_PROBLEMS = ("diet_plan", "project_selection", "fixed_charge_supply", "shift_cover", "mcp_build_model")
+WORD_PROBLEMS = ("diet_plan", "project_selection", "fixed_charge_supply", "shift_cover", "mcp_build_model",
+                 "supplier_sourcing")
+
+
+def _reference(tid):
+    """The hand-written reference model: MPS, or LP when the problem has general constraints."""
+    for ext in ("mps", "lp"):
+        p = os.path.join(task_dir(tid), "selfcheck", f"reference.{ext}")
+        if os.path.exists(p):
+            return p
+    raise FileNotFoundError(f"tasks/{tid}/selfcheck/reference.(mps|lp)")
 
 
 def _grade_word_problem(tid, ans):
-    model = os.path.join(task_dir(tid), "selfcheck", "reference.mps")
+    model = _reference(tid)
     truth = rs.mip(model)
     for k in ("status", "objective", "plan"):
         if k not in ans:
@@ -469,6 +532,51 @@ def grade_mcp_build_model(ans):
     return _grade_word_problem("mcp_build_model", ans)
 
 
+def grade_supplier_sourcing(ans):
+    return _grade_word_problem("supplier_sourcing", ans)
+
+
+# ------------------------------------------------------------------ class_cp_scheduling
+# Native scheduling objects have no file syntax, so the reference is built in Python by
+# `cp_reference.py` (run with RSV_PY, an interpreter that has the `rusolve` package), solved at
+# grading time, and the reported plan is judged with `Model.check`, which evaluates the intervals
+# and no-overlap objects themselves.
+
+def _cp_ref(*args):
+    import subprocess
+    py = os.environ.get("RSV_PY", "python3")
+    r = subprocess.run([py, "-I", os.path.join(HERE, "cp_reference.py"), *args], capture_output=True, text=True,
+                       timeout=300)
+    if r.returncode != 0:
+        raise RuntimeError(f"cp_reference.py {args[0]} exited {r.returncode}: {r.stderr.strip()[-400:]}")
+    return json.loads(r.stdout)
+
+
+def grade_class_cp_scheduling(ans):
+    truth = _cp_ref("solve")
+    for k in ("status", "objective", "plan"):
+        if k not in ans:
+            return False, f"answer lacks '{k}'"
+    if ans["status"] != truth["status"]:
+        return False, f"status {ans['status']!r}, rusolve says {truth['status']!r}"
+    t = truth["objective"]
+    if not _num(ans["objective"]) or abs(ans["objective"] - t) > 1e-6 * (1 + abs(t)):
+        return False, f"objective {ans['objective']!r}, rusolve's reference model says {t}"
+    plan = ans["plan"]
+    if not isinstance(plan, dict) or not all(_num(v) for v in plan.values()):
+        return False, "'plan' must map variable names to numbers"
+    reported = {n for n in truth["plan"] if n.startswith("s") or n == "cmax"}
+    unknown = sorted(set(plan) - reported)
+    if unknown:
+        return False, f"unknown variables in 'plan': {unknown}"
+    chk = _cp_ref("check", json.dumps(plan))
+    if chk["verdict"] != "feasible":
+        return False, f"plan breaks the problem's rules: {chk['findings']}"
+    if abs(chk["objective"] - t) > 1e-6 * (1 + abs(t)):
+        return False, f"plan has objective {chk['objective']}, the optimum is {t}"
+    return True, f"status and objective {t:.6g} match; the schedule is feasible on the intervals and no-overlap objects"
+
+
 GRADERS = {
     "solve_report": grade_solve_report,
     "debug_infeasible": grade_debug_infeasible,
@@ -485,11 +593,16 @@ GRADERS = {
     "class_routing": grade_class_routing,
     "class_pwl_semi": grade_class_pwl_semi,
     "class_qp": grade_class_qp,
+    "class_conic": grade_class_conic,
+    "class_miqp": grade_class_miqp,
+    "class_misocp": grade_class_misocp,
     "diet_plan": grade_diet_plan,
     "project_selection": grade_project_selection,
     "fixed_charge_supply": grade_fixed_charge_supply,
     "shift_cover": grade_shift_cover,
     "mcp_build_model": grade_mcp_build_model,
+    "supplier_sourcing": grade_supplier_sourcing,
+    "class_cp_scheduling": grade_class_cp_scheduling,
 }
 
 
@@ -513,10 +626,19 @@ def _class_cases():
         base = {"status": t["status"], "objective": t["objective"], "playbook": PLAYBOOK[tid]}
         wrong = dict(base, objective=t["objective"] + 1)
         good = dict(base)
-        if tid in ("class_flow", "class_cover", "class_pwl_semi", "class_qp"):
+        if tid in ("class_flow", "class_cover", "class_pwl_semi", "class_qp", "class_conic", "class_miqp", "class_misocp"):
             good["class"] = t["class"]
-        if tid == "class_pwl_semi":
+        if tid in ("class_pwl_semi", "class_conic", "class_miqp", "class_misocp"):
             good["engine"] = t["engine"]
+        if tid in ("class_conic", "class_misocp"):
+            cols = {c["name"]: c["value"] for c in t["solution"]["columns"]}
+            good["values"] = {n: round(cols[n], 4) for n in "abc"}
+            wrong = dict(good, values=dict(good["values"], a=good["values"]["a"] + 0.5))
+        if tid == "class_miqp":
+            cols = {c["name"]: c["value"] for c in t["solution"]["columns"]}
+            good["weights"] = [round(cols[f"w{i}"], 4) for i in range(4)]
+            good["held"] = sorted(n for n, v in cols.items() if n.startswith("y") and v > 0.5)
+            wrong = dict(good, held=["y0", "y1", "y2", "y3"])
         if tid in ("class_scheduling", "class_lotsizing"):
             good["big_m_rows"] = _lint_bigm(tid)
             wrong = dict(good, big_m_rows=0)
@@ -562,6 +684,10 @@ def _rule_breakers(tid, sol):
         return [("cap_2 broken", {**sol, "ship_3_2": 20, "ship_2_2": 5, "ship_3_4": 5, "ship_1_4": 30}, "cap_2")]
     if tid == "shift_cover":   # one Monday starter moved to Tuesday: same cost, Monday uncovered
         return [("cover_mon broken", {**sol, "start_mon": sol["start_mon"] - 1, "start_tue": sol["start_tue"] + 1}, "cover_mon")]
+    if tid == "supplier_sourcing":   # B delivers with its switch off; A and C both deliver; B below its minimum lot
+        return [("b_off broken", {**sol, "useB": 0}, "b_off"),
+                ("a_or_c broken", {"qA": 10, "qB": 70, "qC": 20, "useB": 1, "largest": 70}, "a_or_c"),
+                ("b_min broken", {"qB": 10, "qC": 50, "qA": 0, "useB": 1, "largest": 50}, "b_min")]
     if tid == "mcp_build_model":   # 17 rolls on 5 loaves: the same profit, rolls above 1.5 x loaves
         return [("rolls_cap broken", {"loaves": 5, "rolls": 17, "cakes": 1}, "rolls_cap")]
     return []
@@ -605,7 +731,7 @@ def _selfcheck():
     }
     cases.update(_class_cases())
     for tid in WORD_PROBLEMS:
-        ref = rs.mip(os.path.join(d(tid), "selfcheck", "reference.mps"))
+        ref = rs.mip(_reference(tid))
         sol = {c["name"]: c["value"] for c in ref["solution"]["columns"] if abs(c["value"]) > 1e-9}
         first = next(iter(sol))
         cases[tid] = (
@@ -616,6 +742,22 @@ def _selfcheck():
              ("no plan", {"status": ref["status"], "objective": ref["objective"]}),
              *[(label, {"status": ref["status"], "objective": ref["objective"], "plan": plan}, row)
                for label, plan, row in _rule_breakers(tid, sol)]])
+    ref = _cp_ref("solve")
+    sol = {n: v for n, v in ref["plan"].items() if n.startswith("s") or n == "cmax"}
+    head = {"status": ref["status"], "objective": ref["objective"]}
+
+    def pulled_to_first(k):
+        """The operation of machine k that starts last, moved to the earliest start on that machine:
+        the same makespan (it only moves earlier), but it now overlaps another operation there."""
+        ops = sorted((n for n in sol if n.startswith("s") and n.endswith(str(k))), key=sol.get)
+        return {**sol, ops[-1]: sol[ops[0]]}
+
+    cases["class_cp_scheduling"] = (
+        {**head, "plan": sol},
+        [("objective off", {**head, "objective": ref["objective"] + 1, "plan": sol}),
+         ("no plan", head),
+         ("overlap on M1", {**head, "plan": pulled_to_first(1)}, "machine1"),
+         ("overlap on M2", {**head, "plan": pulled_to_first(2)}, "machine2")])
     failed = 0
     for tid, (good, bad) in cases.items():
         g_ok, g_detail = GRADERS[tid](good)

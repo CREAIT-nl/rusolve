@@ -9,6 +9,13 @@ use crate::mip::symmetry_dynamic::hook::{s3_child_path, s3_propagate};
 use crate::prelude::*;
 use std::sync::Arc;
 
+/// `RUSOLVE_TREE_TRACE=1` (debug, reporting only): print one line per dive and per node of the
+/// main search on stderr. The search never reads it.
+pub(crate) fn tree_trace() -> bool {
+    static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *ON.get_or_init(|| std::env::var("RUSOLVE_TREE_TRACE").is_ok_and(|v| v == "1"))
+}
+
 /// C++ `currnode.branchingdecision.boundtype` / `boundval` and `currnode.other_child_lb`
 /// assignments of `HighsSearch::branch` (the same three writes in each child-selection arm).
 fn set_branch_decision(
@@ -213,7 +220,7 @@ impl HighsSearch {
                 let feastol: f64 = self.get_feas_tol(ctx);
                 let epsilon: f64 = self.get_epsilon(ctx);
 
-                match self.childselrule {
+                match self.effective_child_rule(ctx.ms) {
                     HighsSearch_ChildSelectionRule::kUp => {
                         set_branch_decision(
                             self.nodestack.last_mut().unwrap(),
@@ -820,6 +827,8 @@ impl HighsSearch {
         debug_assert!(self.nodestack.last().unwrap().opensubtrees == 0);
         // HiGHS 1.16 #3192 (h16_mip_workers): HighsSearch.cpp backtrackPlunge lines 1619-1741 (1.16.0)
         let h16_mip_workers = ctx.ms.options_mip_.h16_mip_workers;
+        // rusolve mip_plunge_quot: siblings above this bound go to the queue (+inf when off)
+        let plunge_bound = self.plunge_max_bound(ctx.ms);
 
         loop {
             while self.nodestack.last().unwrap().opensubtrees == 0 {
@@ -929,7 +938,8 @@ impl HighsSearch {
             nodelb = cpp_max(nodelb, self.localdom.get_objective_lower_bound());
             if h16_mip_workers {
                 // HiGHS 1.16 #3192 (h16_mip_workers): HighsSearch.cpp lines 1715-1725 (1.16.0)
-                let node_to_queue = nodelb > ctx.worker().get_optimality_limit(&*ctx.ms);
+                let node_to_queue =
+                    nodelb > ctx.worker().get_optimality_limit(&*ctx.ms) || nodelb > plunge_bound;
                 if node_to_queue {
                     let queue_estimate = self.nodestack.last().unwrap().estimate;
                     let depth = self.get_current_depth() + 1;
@@ -947,7 +957,8 @@ impl HighsSearch {
                     continue;
                 }
             }
-            let mut node_to_queue = !h16_mip_workers && nodelb > self.get_optimality_limit(ctx);
+            let mut node_to_queue = !h16_mip_workers
+                && (nodelb > self.get_optimality_limit(ctx) || nodelb > plunge_bound);
             // we check if switching to the other branch of an ancestor yields a higher
             // additive branch score than staying in this node and if so we postpone the
             // node and put it to the queue to backtrack further.
@@ -996,16 +1007,19 @@ impl HighsSearch {
                     .get_reduced_domain_change_stack(&mut branch_positions);
                 let queue_estimate = self.nodestack.last().unwrap().estimate;
                 let depth = self.get_current_depth() + 1;
-                let tmp_tree_weight = if s3 {
+                // mip_node_install_basis: the queued sibling carries its parent's basis
+                let basis = self.queued_node_basis(ctx);
+                let tmp_tree_weight = if s3 || basis.is_some() {
                     // mip_symmetry_dynamic: SCIP symmetry_orbitopal.c lines 720-962 at
                     // 32dd425 (the queued sibling carries its path, D3)
-                    ctx.node_queue(nodequeue).emplace_node_s3(
+                    ctx.node_queue(nodequeue).emplace_node_ext(
                         domchg_stack,
                         branch_positions,
                         nodelb,
                         queue_estimate,
                         depth,
                         s3_sibling_path.clone(),
+                        basis,
                     )
                 } else {
                     ctx.node_queue(nodequeue).emplace_node(
@@ -1140,10 +1154,34 @@ impl HighsSearch {
     /// C++ default arguments: `node_lim = std :: numeric_limits < int64_t > :: max ( )`
     pub fn dive(&mut self, ctx: &mut SearchCtx<'_>, node_lim: i64) -> HighsSearch_NodeResult {
         self.reliableatnode.clear();
+        let trace = !self.inheuristic && !ctx.ms.submip && tree_trace();
+        if trace {
+            // reporting only: 'TD' opens a dive; origin 1 = sibling from backtrack_plunge,
+            // 0 = a node installed from the queue
+            eprintln!(
+                "TD {:.3} {} {} {}",
+                ctx.ms.timer_.read(),
+                ctx.ms.mipdata_.num_nodes + self.nnodes,
+                self.get_current_depth(),
+                self.eval_origin
+            );
+        }
 
         loop {
             self.nnodes += 1;
             let result = self.evaluate_node(ctx);
+            if trace {
+                // reporting only: depth, result, fractional integers, LP objective, upper limit
+                let n = self.nodestack.len() - 1;
+                eprintln!(
+                    "TN {} {} {} {} {}",
+                    self.get_current_depth(),
+                    result as u8,
+                    ctx.lp.get_fractional_integers().len(),
+                    self.nodestack[n].lp_objective,
+                    ctx.ms.mipdata_.upper_bound
+                );
+            }
 
             if self.check_limits(ctx, self.nnodes) {
                 return result;
@@ -1153,6 +1191,16 @@ impl HighsSearch {
                 return result;
             }
 
+            // rusolve mip_node_rounding (Achterberg 2007 section 9.1): round the node LP
+            // solution every k-th dive node; a new incumbent may prune the node at once.
+            let freq = ctx.ms.options_mip_.mip_node_rounding as i64;
+            if freq > 0 && !self.inheuristic && !ctx.ms.submip && self.nnodes % freq == 0 {
+                let pruned = self.node_rounding(ctx);
+                if pruned {
+                    return HighsSearch_NodeResult::kBoundExceeding;
+                }
+            }
+
             let result = self.branch(ctx);
             if result != HighsSearch_NodeResult::kBranched {
                 return result;
@@ -1160,7 +1208,82 @@ impl HighsSearch {
             if self.nnodes >= node_lim {
                 return result;
             }
+            // rusolve mip_plunge_quot: stop the dive at a child whose lower bound is above the
+            // plunge bound; the caller ends the plunge and queues the open nodes.
+            if ctx.ms.options_mip_.mip_plunge_quot > 0.0
+                && self.nodestack.last().unwrap().lower_bound > self.plunge_max_bound(ctx.ms)
+            {
+                self.plunge_bound_stop = true;
+                return result;
+            }
         }
+    }
+
+    /// rusolve mip_node_rounding: run [`crate::mip::node_rounding::round_lp_point`] on the
+    /// current node's LP solution and try the point as an incumbent. Returns true when the new
+    /// incumbent cuts the current node off; the node is then pruned as `evaluate_node` prunes
+    /// a bound-exceeding node.
+    fn node_rounding(&mut self, ctx: &mut SearchCtx<'_>) -> bool {
+        let status = ctx.lp.get_status();
+        if !HighsLpRelaxation::unscaled_primal_feasible(status)
+            || ctx.lp.get_fractional_integers().is_empty()
+        {
+            return false;
+        }
+        let t0 = ctx.ms.timer_.read();
+        ctx.ms.stats_.noderound_calls += 1;
+        let gd = ctx.worker().get_global_domain();
+        let point = crate::mip::node_rounding::round_lp_point(
+            &*ctx.ms,
+            &ctx.ms.mipdata_.domains[gd].col_lower_,
+            &ctx.ms.mipdata_.domains[gd].col_upper_,
+            &ctx.lp.get_solution().col_value,
+            ctx.lp.get_fractional_integers(),
+            ctx.ms.options_mip_.mip_node_rounding_polish,
+        );
+        let mut pruned = false;
+        if let Some(p) = point {
+            ctx.ms.stats_.noderound_found[p.stage] += 1;
+            if p.polished {
+                ctx.ms.stats_.noderound_polished += 1;
+            }
+            let ub = ctx.ms.mipdata_.upper_bound;
+            if p.objective < ctx.ms.mipdata_.upper_limit {
+                if crate::mip::node_rounding::node_rounding_dry() {
+                    ctx.ms.stats_.noderound_improving += 1;
+                    eprintln!(
+                        "node_rounding_dry t={:.3} obj={} ub={} stage={} nodes={}",
+                        ctx.ms.timer_.read(),
+                        p.objective + mip_model!(ctx.ms).offset_,
+                        ub + mip_model!(ctx.ms).offset_,
+                        p.stage,
+                        ctx.ms.mipdata_.num_nodes + self.nnodes
+                    );
+                } else {
+                    let src = kSolutionSourceNodeRounding;
+                    if ctx.ms.parallel_lock_active() {
+                        let w = ctx.worker;
+                        let ms = &mut *ctx.ms;
+                        detach!(ms.mipdata_.workers[w], |wk| wk
+                            .try_solution(ms, &p.sol, src));
+                    } else {
+                        ctx.lend_back(|ms| ms.try_solution(&p.sol, src));
+                    }
+                    if ctx.ms.mipdata_.upper_bound < ub {
+                        ctx.ms.stats_.noderound_improving += 1;
+                        let n = self.nodestack.len() - 1;
+                        if self.nodestack[n].lower_bound > self.get_cutoff_bound(ctx) {
+                            ctx.ms.mipdata_.debug_solution.node_pruned(&self.localdom);
+                            self.treeweight += ldexp_f64(1.0, 1 - self.get_current_depth());
+                            self.nodestack[n].opensubtrees = 0;
+                            pruned = true;
+                        }
+                    }
+                }
+            }
+        }
+        ctx.ms.stats_.noderound_s += ctx.ms.timer_.read() - t0;
+        pruned
     }
 
     /// HiGHS: HighsSearch.cpp::HighsSearch::solveDepthFirst (lines 1887-1898)
@@ -1454,6 +1577,8 @@ mod tests {
         options.mip_heuristic_run_root_reduced_cost = false;
         options.mip_heuristic_run_zi_round = false;
         options.mip_heuristic_run_shifting = false;
+        // The HiGHS child rule: the pinned node counts below are the HiGHS path.
+        options.mip_child_selection = -1;
         options
     }
 
@@ -1495,6 +1620,101 @@ mod tests {
         assert!(on.2 > 1, "node count {}", on.2);
         assert!(on.3 <= 2);
         assert_eq!(on, off);
+    }
+
+    /// rusolve `mip_plunge_*`: with the gate always open (every lever on, in both search loops)
+    /// the plunge stops early and the queue picks change, and the solve still proves the
+    /// enumerated optimum.
+    #[test]
+    fn plunge_levers_keep_optimum() {
+        let solve = |h16: bool, on: bool| {
+            std::thread::spawn(move || {
+                initialize_scheduler(1);
+                let mut options = base_options();
+                options.h16_mip_workers = h16;
+                if on {
+                    options.mip_plunge_gap = 1e9;
+                    options.mip_plunge_quot = 0.05;
+                    options.mip_plunge_max_nodes = 5;
+                    options.mip_plunge_bestbound_freq = 1;
+                }
+                let lp = knapsack_lp(20);
+                let solution = HighsSolution::default();
+                let mut callback = HighsCallback::default();
+                let mut ms = HighsMipSolver::new(&mut callback, &options, &lp, &solution, false, 0);
+                ms.run();
+                let out = (ms.modelstatus_, ms.solution_objective_, ms.node_count_);
+                drop(ms);
+                HighsTaskExecutor::shutdown(true);
+                out
+            })
+            .join()
+            .unwrap()
+        };
+        let opt = brute_force_optimum(&knapsack_lp(20));
+        for h16 in [false, true] {
+            let off = solve(h16, false);
+            let on = solve(h16, true);
+            assert_eq!(on.0, HighsModelStatus::kOptimal);
+            // The objective is summed in solve order, so the last bits can differ from the
+            // enumeration (-690.9999999999993 for -691 with the levers off).
+            assert!(
+                (on.1 - opt).abs() <= 1e-9 * opt.abs().max(1.0),
+                "{} vs {opt}",
+                on.1
+            );
+            assert!(
+                (off.1 - opt).abs() <= 1e-9 * opt.abs().max(1.0),
+                "{} vs {opt}",
+                off.1
+            );
+            assert!(on.2 > 1, "node count {}", on.2);
+        }
+    }
+
+    /// rusolve `mip_node_install_basis` and `mip_node_sepa_max_rounds`: with the plunge levers
+    /// on (so that most nodes come from the queue), queued nodes start from their parent's
+    /// basis and node separation stops after one round, and the solve still proves the
+    /// enumerated optimum in both search loops.
+    #[test]
+    fn node_install_levers_keep_optimum() {
+        let solve = |h16: bool, basis: bool, rounds: HighsInt| {
+            std::thread::spawn(move || {
+                initialize_scheduler(1);
+                let mut options = base_options();
+                options.h16_mip_workers = h16;
+                options.mip_plunge_gap = 1e9;
+                options.mip_plunge_quot = 0.05;
+                options.mip_plunge_max_nodes = 5;
+                options.mip_plunge_bestbound_freq = 1;
+                options.mip_node_install_basis = basis;
+                options.mip_node_sepa_max_rounds = rounds;
+                let lp = knapsack_lp(20);
+                let solution = HighsSolution::default();
+                let mut callback = HighsCallback::default();
+                let mut ms = HighsMipSolver::new(&mut callback, &options, &lp, &solution, false, 0);
+                ms.run();
+                let out = (ms.modelstatus_, ms.solution_objective_, ms.node_count_);
+                drop(ms);
+                HighsTaskExecutor::shutdown(true);
+                out
+            })
+            .join()
+            .unwrap()
+        };
+        let opt = brute_force_optimum(&knapsack_lp(20));
+        for h16 in [false, true] {
+            for (basis, rounds) in [(true, 0), (false, 1), (true, 1)] {
+                let on = solve(h16, basis, rounds);
+                assert_eq!(on.0, HighsModelStatus::kOptimal);
+                assert!(
+                    (on.1 - opt).abs() <= 1e-9 * opt.abs().max(1.0),
+                    "{} vs {opt}",
+                    on.1
+                );
+                assert!(on.2 > 1, "node count {}", on.2);
+            }
+        }
     }
 
     /// #3445 (HighsSearch.cpp:1809-1820 at b1282872a): `solveDepthFirst(maxbacktracks,

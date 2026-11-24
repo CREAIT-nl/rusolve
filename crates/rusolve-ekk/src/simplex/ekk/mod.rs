@@ -17,6 +17,7 @@ use crate::prelude::*;
 mod clear;
 mod control;
 mod debug;
+pub mod dse_keep;
 mod dualize;
 mod factor;
 mod init;
@@ -92,6 +93,12 @@ pub struct HEkk {
     pub bad_basis_change_: Vec<HighsSimplexBadBasisChangeRecord>,
     pub primal_phase1_dual_: Vec<f64>,
     pub simplex_stats_: HighsSimplexStats,
+    /// Not in HiGHS (perf only): recycled storage for the scratch `HVector`s built per LP
+    /// solve; see [`crate::util::hvector::HVectorPool`]. Never changes a computed value.
+    pub hvector_pool_: crate::util::hvector::HVectorPool,
+    /// Not in HiGHS (lever `mip_lp_keep_dse_weights`): dual steepest-edge weights kept by
+    /// variable across a basis or row change; see `dse_keep.rs`.
+    pub dse_keep_: dse_keep::DseKeep,
 }
 
 impl Default for HEkk {
@@ -158,6 +165,8 @@ impl Default for HEkk {
             bad_basis_change_: Default::default(),
             primal_phase1_dual_: Default::default(),
             simplex_stats_: Default::default(),
+            hvector_pool_: Default::default(),
+            dse_keep_: Default::default(),
         }
     }
 }

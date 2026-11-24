@@ -323,6 +323,8 @@ pub const kSolutionSourceShiftProp: i32 = 23;
 pub const kSolutionSourceProximity: i32 = 24;
 /// rusolve mip_local_branching (Fischetti, Lodi 2003): local-branching sub-MIP solutions, log letter `K`.
 pub const kSolutionSourceLocalBranching: i32 = 25;
+/// rusolve mip_node_rounding (Achterberg 2007 ch. 9): rounding of a dive node's LP solution, log letter `D`.
+pub const kSolutionSourceNodeRounding: i32 = 26;
 
 impl HighsMipSolver {
     /// HiGHS: HighsMipSolverData.h::HighsMipSolverData::getRow (lines 232-238)

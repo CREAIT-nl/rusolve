@@ -76,7 +76,7 @@ pub struct MipRunStats {
     /// `HighsSeparation::separation_round` calls (root and tree).
     pub sepa_rounds: RelaxedCounter,
     /// Improving incumbents by `solution_source + 1` (source `-1` = none is slot 0).
-    pub improving_by_source: [i64; 27],
+    pub improving_by_source: [i64; 28],
     /// `timer_` seconds and work at the first incumbent.
     pub first_incumbent_s: Option<f64>,
     pub first_incumbent_work: u64,
@@ -96,6 +96,13 @@ pub struct MipRunStats {
     pub shiftprop_cutoffs: i64,
     pub shiftprop_violations_left: i64,
     pub shiftprop_s: f64,
+    /// mip_node_rounding: calls, solutions found by simple rounding / activity rounding / the
+    /// shifting repair, improving ones, seconds. Reporting only.
+    pub noderound_calls: i64,
+    pub noderound_found: [i64; 3],
+    pub noderound_improving: i64,
+    pub noderound_polished: i64,
+    pub noderound_s: f64,
     /// mip_proximity / mip_local_branching (Fischetti-Monaci 2014, Fischetti-Lodi 2003): sub-MIP calls, improving
     /// ones, nodes and work. Reporting only.
     pub prox_calls: i64,
@@ -111,7 +118,7 @@ pub struct MipRunStats {
 impl MipRunStats {
     /// Records an improving incumbent found by `solution_source` (HighsMipSolverData::addIncumbent).
     pub fn record_incumbent(&mut self, solution_source: i32, time_s: f64) {
-        let slot = (solution_source + 1).clamp(0, 26) as usize;
+        let slot = (solution_source + 1).clamp(0, 27) as usize;
         self.improving_by_source[slot] += 1;
         if self.first_incumbent_s.is_none() {
             self.first_incumbent_s = Some(time_s);

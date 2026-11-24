@@ -893,6 +893,11 @@ impl HighsMipSolver {
         self.mipdata_.heuristic_lp_iterations_before_run = self.mipdata_.heuristic_lp_iterations;
         self.mipdata_.sepa_lp_iterations_before_run = self.mipdata_.sepa_lp_iterations;
         self.mipdata_.sb_lp_iterations_before_run = self.mipdata_.sb_lp_iterations;
+        // rusolve mip_node_bigm: the restart takes the LP relaxation as the new model, so the
+        // node-local big-M rows of the last node must go first, or they become global rows.
+        for lp in self.mipdata_.lps.iter_mut() {
+            lp.restore_local_mods();
+        }
         let num_lp_rows = self.mipdata_.lps[0].get_lp().num_row_;
         let num_model_rows = self.num_row();
         let num_cuts = num_lp_rows - num_model_rows;

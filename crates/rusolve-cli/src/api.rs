@@ -29,9 +29,14 @@ pub fn columns_by_name(lp: &HighsLp, pairs: &[(String, f64)]) -> Result<Vec<f64>
     check::columns_by_name(lp, pairs).map_err(|e| e.0)
 }
 
-/// `rusolve.check/1` for a complete assignment `values` (original column order).
+/// `rusolve.check/1` for a complete assignment `values` (original column order). `gc` carries
+/// the model's general constraints and `cp` its scheduling and combinatorial objects (both are
+/// checked on the user's objects, not on a linearization).
+#[allow(clippy::too_many_arguments)]
 pub fn check(
     lp: &HighsLp,
+    gc: Option<&rusolve_io::GcModel>,
+    cp: Option<&rusolve_io::CpModel>,
     values: &[f64],
     primal_tolerance: Option<f64>,
     mip_tolerance: Option<f64>,
@@ -54,8 +59,10 @@ pub fn check(
         mip_feasibility_tolerance: mip,
         applied: if lp.is_mip() { mip } else { primal },
     };
-    let report = check::check_solution(
+    let report = check::check_solution_objects(
         lp,
+        gc,
+        cp,
         values,
         tol,
         max_findings.unwrap_or(check::DEFAULT_MAX_FINDINGS),
@@ -241,12 +248,28 @@ pub struct EnvParts {
     counts: ModelCounts,
     digest: [u8; 32],
     convex_qp: bool,
+    /// `(class, engine)` the Python API sets for a model the router would read from a file
+    /// (`cp`, `cp-linearization`).
+    route: Option<(&'static str, String)>,
 }
 
 /// The pieces of the `rusolve.result/1` envelope of the solve `h` just finished. `options` are
 /// the settings the caller changed, in order (`run.options`); `name` is `input.path`.
 pub fn env_parts(
     h: &Highs,
+    run_status: HighsStatus,
+    time_s: f64,
+    name: &str,
+    options: &[(String, String)],
+) -> EnvParts {
+    env_parts_for(h, &h.model_lp_, run_status, time_s, name, options)
+}
+
+/// [`env_parts`] with the model counts and digest taken from `lp`: the user's model when `h`
+/// solved its linearization (general constraints), so the envelope describes what the user built.
+pub fn env_parts_for(
+    h: &Highs,
+    lp: &HighsLp,
     run_status: HighsStatus,
     time_s: f64,
     name: &str,
@@ -264,7 +287,6 @@ pub fn env_parts(
             std::thread::available_parallelism().map_or(1, |n| (n.get() / 2).max(1)) as HighsInt
         })
     };
-    let lp = &h.model_lp_;
     let info = h.get_info();
     EnvParts {
         name: name.to_string(),
@@ -295,6 +317,7 @@ pub fn env_parts(
         },
         digest: model_digest_raw(lp),
         convex_qp: false,
+        route: None,
     }
 }
 
@@ -303,6 +326,12 @@ impl EnvParts {
     /// the class cannot be read from the model).
     pub fn set_convex_qp(&mut self) {
         self.convex_qp = true;
+    }
+
+    /// Names the class and engine of the solve (`cp`, `cp-linearization`) for a model whose class
+    /// cannot be read from the LP (the Python API keeps its CP objects outside it).
+    pub fn set_route(&mut self, class: &'static str, engine: &str) {
+        self.route = Some((class, engine.to_string()));
     }
 
     /// The `rusolve.result/1` envelope.
@@ -344,6 +373,10 @@ impl EnvParts {
             env.class = "convex_qp".to_string();
             env.convexity = Some("convex");
         }
+        if let Some((class, engine)) = &self.route {
+            env.class = class.to_string();
+            env.engine = engine.clone();
+        }
         env
     }
 }
@@ -379,10 +412,12 @@ pub fn envelope_value(
 
 /// Writes `lp` (with the objective Hessian `hessian`, full square `(row, col, value)` entries, or
 /// empty) to `path` in the format its extension names (`.mps`, `.lp`, either with `.gz`), through
-/// the writer `rusolve convert` uses. Semi-continuous columns are refused: the file formats keep
-/// them as general constraints, which this path does not carry.
+/// the writer `rusolve convert` uses. `gc` is the model's general constraints, written with it.
+/// Semi-continuous columns are refused: the writer keeps them in the model's `gc.semi`, which this
+/// path does not fill.
 pub fn write_model(
     lp: &HighsLp,
+    gc: Option<&rusolve_io::GcModel>,
     hessian: &[(usize, usize, f64)],
     path: &str,
 ) -> Result<(), String> {
@@ -486,8 +521,9 @@ pub fn write_model(
         row_names: (0..nr).map(|i| name_of(&lp.row_names_, i, "r")).collect(),
         col_names: (0..n).map(|j| name_of(&lp.col_names_, j, "c")).collect(),
         hessian: hessian.to_vec(),
-        gc: Default::default(),
+        gc: gc.cloned().unwrap_or_default(),
         conic: Default::default(),
+        cp: Default::default(),
     };
     rusolve_io::write_model_file_report(path, &model)
         .map(|_| ())

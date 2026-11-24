@@ -4,6 +4,7 @@ The HiGHS dual and primal simplex (`HEkk`, `HEkkDual`, `HEkkDualRHS`, `HEkkDualR
 
 ## What lives here
 - `ekk/`: `HEkk` (init, factor, iterate, solve, dualize, proof, debug); `solve.rs` is the driver.
+  `ekk/dse_keep.rs` is not in HiGHS: the default-off lever `mip_lp_keep_dse_weights`, which keeps the dual steepest-edge weights by variable across `setBasis`, `addRows` and `deleteRows`.
 - `dual/`: `HEkkDual` (assess, phases, iterate, update, solve) and `dual/multi/` (PAMI, parallel); `dual_rhs.rs`, `dual_row.rs`.
 - `primal/`: `HEkkPrimal` (iterate, row, hyper, weights, report, solve).
 - `nla/`: `HSimplexNla` (`nla.rs`, `product_form.rs`, `debug.rs`).

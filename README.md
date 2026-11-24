@@ -11,9 +11,26 @@ command can return JSON, every error has a code and an explanation, and an MCP s
 in.
 
 **Status:** early (0.1.0), not yet on PyPI. LP and MIP are the core. Convex quadratic
-objectives and semi-continuous variables are supported. Interfaces may still change.
+objectives, second-order cone and convex quadratically constrained programs, general constraints
+(indicator, SOS, piecewise-linear, min/max/abs) and semi-continuous variables are supported;
+convex MIQP and mixed-integer conic models run through experimental levers (`miqp_oa`,
+`misocp_oa`), off by default. Interfaces may still change.
 
 ## Install
+
+Prebuilt `rusolve-cli` for Linux (x86_64, aarch64) and macOS (arm64, x86_64), from the latest
+GitHub release, into `~/.local/bin`:
+
+    curl -fsSL https://raw.githubusercontent.com/CREAIT-nl/rusolve/main/install.sh | sh
+
+Options: `--version vX.Y.Z`, `--prefix DIR`, `--uninstall`, `--dry-run`. The optional CP-SAT
+engine (`mip_engine=cpsat`, Google OR-Tools, Apache-2.0) is asked about on a terminal and is off
+otherwise; `--with-cpsat` fetches the OR-Tools libraries (about 30 MB, from PyPI) into
+`PREFIX/lib/rusolve/ortools/`. Details: [`docs/design/install.md`](docs/design/install.md).
+Python users keep `pip install rusolve`. The installer also registers the MCP server with the
+`claude`, `codex` and `gemini` CLIs it finds and installs the skills for Claude Code; opt out
+with `--no-agent` (`--no-mcp`, `--no-skills`). An agent asked to install rusolve should follow
+[`INSTALL.md`](INSTALL.md).
 
 From source (works today; needs a Rust toolchain):
 

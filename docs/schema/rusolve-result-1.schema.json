@@ -131,10 +131,10 @@
     },
     "class": {
       "description": "The problem class the router assigned, the same name `rusolve classify --format json` reports. For a plain LP or MIP, which the router does not read, it is `mip` when the model has integer columns and `lp` otherwise (`rusolve solve` on a MIP solves the relaxation and says `lp`).",
-      "enum": ["lp", "mip", "convex_qp", "conic", "gc", "gc_mip"]
+      "enum": ["lp", "mip", "convex_qp", "miqp", "mi_conic", "conic", "gc", "gc_mip", "cp"]
     },
     "engine": {
-      "description": "The engine that solved the class: `highs-port` or `native` for LP and MIP (as solver.engine), `hipo` or `quass` for a convex QP (the same name as `qp.engine`; the selection and any fallback are in the `qp` object), `clarabel` for conic and convex QCQP, `gc-linearization` for general constraints (linearized, then the HiGHS port). solver.engine stays the stack that ran.",
+      "description": "The engine that solved the class: `highs-port` or `native` for LP and MIP (as solver.engine), `hipo` or `quass` for a convex QP (the same name as `qp.engine`; the selection and any fallback are in the `qp` object), `clarabel` for conic and convex QCQP, `gc-linearization` for general constraints (linearized, then the HiGHS port), `cp-linearization` for scheduling and combinatorial objects (intervals, no-overlap, cumulative, all-different, element, table: linearized, then the HiGHS port), `oa` for a convex MIQP with `miqp_oa` on or a mixed-integer SOCP / convex MIQCQP with `misocp_oa` on (outer approximation over the HiGHS port; details in the `miqp_oa` or `misocp_oa` object), `cp-sat` for a MIP solved by Google OR-Tools CP-SAT with `mip_engine=cpsat` (details in the `cpsat` object). solver.engine stays the stack that ran.",
       "type": "string"
     },
     "convexity": {
@@ -434,6 +434,22 @@
     },
     "general_constraints": {
       "description": "Present when the model has general constraints (indicator, SOS, piecewise-linear, min/max/abs/and/or, semi-continuous): what was linearized (added_columns, added_rows, objects by kind, the route per object), and whether the answer was checked against the user's objects (verified, violations).",
+      "type": "object"
+    },
+    "cp": {
+      "description": "Present when the model has scheduling or combinatorial (CP) objects (interval, no-overlap, cumulative, all-different, element, table): the engine, the objects by kind, how each was linearized (routes, added_columns, added_rows; absent with CP-SAT, whose `cpsat` object is then inside `cp` too), whether the answer was checked against the user's objects (checked, verified, violations). An answer that fails the check is never reported feasible.",
+      "type": "object"
+    },
+    "miqp_oa": {
+      "description": "Present only when engine is 'oa' (a convex MIQP solved with miqp_oa on): epigraph blocks, whether they are disaggregated and whether the tree separated cuts, the rounds of the exactness loop and whether the last candidate was accepted, the cuts by origin, the root QP relaxation (status and objective), the exact objective of the incumbent (Q included) and the largest amount by which an epigraph value was off the quadratic at that incumbent.",
+      "type": "object"
+    },
+    "misocp_oa": {
+      "description": "Present only when class is 'mi_conic' and engine is 'oa' (a mixed-integer SOCP or convex MIQCQP solved with misocp_oa on): cones (user cones, convex quadratic rows and the objective Hessian, all as second-order cones), whether they are disaggregated, extra columns, whether the tree separated cuts, the rounds of the exactness loop and whether the last candidate was accepted, the cuts by origin, the continuous SOCP root (Clarabel status, objective, seconds), the primal polish (calls, feasible results, improvements, seconds), the origin of the reported incumbent (`polish` or `oa`), the checker verdict of the port's own answer, `bound_inconsistent` (true when the bound passed a checker-feasible point, which turns the status into Unknown) and the checker verdict on the reported point.",
+      "type": "object"
+    },
+    "cpsat": {
+      "description": "Present only when engine is 'cp-sat' (`mip_engine=cpsat`; the OR-Tools library is loaded at run time): CP-SAT's own `status` (OPTIMAL, FEASIBLE, INFEASIBLE or UNKNOWN), its best objective `bound` in the model's sense (null when not finite), `objective` of the checked point (null without one), `wall_time_s`, `workers`, `ortools_version` and `ortools_library` (the file that was loaded), how the objective was passed (`integer`, exact, or `floating_point` for fractional costs), conflicts, branches, auxiliary variables added to the CP model, the limits and seed passed, `checked` (our checker's verdict on the point: every reported point passes it) and a `note` when the bound passed the point and the status was downgraded.",
       "type": "object"
     },
     "conic": {

@@ -393,3 +393,26 @@ an interior-point solver for conic programs (Goulart and Chen 2024, arXiv:2405.1
 unmodified under the Apache License 2.0 (https://www.apache.org/licenses/LICENSE-2.0). It solves the
 continuous SOCP and convex QCQP models routed by `crates/rusolve-cli/src/conic_solve.rs`.
 No Clarabel source is copied into this repository.
+
+## Google OR-Tools CP-SAT (optional linked dependency)
+
+`mip_engine=cpsat` (crate `crates/rusolve-cpsat`) loads the OR-Tools 9.x shared library
+(https://github.com/google/or-tools, Copyright Google LLC) at run time through its C API, under the Apache License 2.0 (https://www.apache.org/licenses/LICENSE-2.0). It
+solves integer programs selected with `mip_engine=cpsat`. The two protocol buffer definitions
+`cp_model.proto` and `sat_parameters.proto` are vendored unmodified in
+`crates/rusolve-cpsat/proto/` together with the OR-Tools license (`LICENSE-ORTOOLS`); the
+Rust types are generated from them at build time. No other OR-Tools source is copied.
+
+The library is opened with `libloading` (ISC licence, https://github.com/nagisa/rust_libloading).
+The OR-Tools wheel or binary release that provides `libortools` is not distributed with this
+repository; it is installed on request (`install.sh --with-cpsat`, `pip install 'rusolve[cpsat]'`).
+The library carries what that release bundles into it:
+Abseil (Apache-2.0), Protocol Buffers (BSD-3-Clause) and the solvers OR-Tools builds in (SCIP,
+Apache-2.0; HiGHS, MIT; Cbc, Clp, CoinUtils and Osi, EPL-2.0). Anyone who redistributes the library
+must ship the notices of the release (the `ortools` wheel carries them in its `dist-info`).
+
+`install.sh` (repository root) downloads the OR-Tools shared libraries from the `ortools` wheel
+on PyPI (https://pypi.org/project/ortools/) only when the user passes `--with-cpsat` or answers
+yes to its question, verifies a pinned SHA-256, and writes them to the user's own install
+prefix. rusolve does not redistribute OR-Tools or its bundled libraries: no OR-Tools file is in
+this repository's releases, and the notices of the wheel stay with the downloaded files.

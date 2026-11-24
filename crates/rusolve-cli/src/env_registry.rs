@@ -224,6 +224,29 @@ pub const ENV_VARS: &[EnvVar] = &[
         ),
     },
     EnvVar {
+        name: "RUSOLVE_INSTALL_BASE_URL",
+        read_by: &["install.sh"],
+        kind: EnvKind::Harness,
+        scope: EnvScope::Any,
+        values: "a base URL the release archives are downloaded from",
+        doc: concat!(
+            "Installer only: where install.sh downloads from. The solver ignores it; it is registered ",
+            "because the installer's children inherit it and unknown RUSOLVE_* names are rejected."
+        ),
+    },
+    EnvVar {
+        name: "RUSOLVE_INSTALL_MARKETPLACE",
+        read_by: &["install.sh"],
+        kind: EnvKind::Harness,
+        scope: EnvScope::Any,
+        values: "a GitHub owner/repo, a git URL or a local path",
+        doc: concat!(
+            "Installer only: the plugin marketplace install.sh adds for the rusolve skills (default ",
+            "CREAIT-nl/rusolve). The solver ignores it; it is registered because the installer's ",
+            "children inherit it and unknown RUSOLVE_* names are rejected."
+        ),
+    },
+    EnvVar {
         name: "RUSOLVE_BLAND_AFTER",
         read_by: &["crates/rusolve-cli/src/main.rs"],
         kind: EnvKind::Lever,
@@ -1119,6 +1142,19 @@ pub const ENV_VARS: &[EnvVar] = &[
         ),
     },
     EnvVar {
+        name: "RUSOLVE_ORTOOLS_LIB",
+        read_by: &["crates/rusolve-cpsat/src/runtime.rs"],
+        kind: EnvKind::Lever,
+        scope: EnvScope::PortMip,
+        values: "path of the OR-Tools shared library file (libortools.so.9, libortools.9.dylib, ortools.dll)",
+        doc: concat!(
+            "Where `mip_engine=cpsat` loads OR-Tools CP-SAT from. First step of the search order ",
+            "(`crates/rusolve-cpsat/src/runtime.rs`, docs/design/cpsat-engine.md); when set, no other place is tried. ",
+            "Unset: the install prefix, the `ortools` Python package, then the system loader. ",
+            "Only read when the engine is selected, so the default search does not depend on it."
+        ),
+    },
+    EnvVar {
         name: "RUSOLVE_STD_LIBSTDCXX",
         read_by: &["crates/rusolve-ekk/src/util/cpp_std.rs"],
         kind: EnvKind::Lever,
@@ -1144,6 +1180,28 @@ pub const ENV_VARS: &[EnvVar] = &[
         doc: concat!(
             "Native MIP: prints presolve, cut-round, restart, clique and branching-tree progress ",
             "lines to stderr."
+        ),
+    },
+    EnvVar {
+        name: "RUSOLVE_NODE_ROUNDING_DRY",
+        read_by: &["crates/rusolve-ekk/src/mip/node_rounding.rs"],
+        kind: EnvKind::Debug,
+        scope: EnvScope::Ekk,
+        values: "set to exactly 1",
+        doc: concat!(
+            "Port MIP, with mip_node_rounding on: count and log to stderr the improving points the ",
+            "node rounding finds without adding them, so the search is the one without it."
+        ),
+    },
+    EnvVar {
+        name: "RUSOLVE_TREE_TRACE",
+        read_by: &["crates/rusolve-ekk/src/mip/search/part2.rs"],
+        kind: EnvKind::Debug,
+        scope: EnvScope::Ekk,
+        values: "set to exactly 1",
+        doc: concat!(
+            "Port MIP main search: print one line per dive (TD), evaluated node (TN), queue pick ",
+            "(TQ) and restart (TR) to stderr. Reporting only; the search is unchanged."
         ),
     },
     EnvVar {

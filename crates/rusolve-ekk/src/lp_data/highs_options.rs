@@ -232,6 +232,22 @@ pub struct HighsOptions {
     pub mip_cut_selection_hybrid: bool,
     pub mip_knapsack_cover_sepa: bool,
     pub mip_dff_separator: bool,
+    // rusolve: MIP LP solves skip the factor accuracy test on a rebuild (lp_relaxation/part1.rs)
+    pub mip_lp_skip_refactor_check: bool,
+    // rusolve: MIP LP solves keep DSE weights by variable across basis and row changes
+    // (simplex/ekk/dse_keep.rs)
+    pub mip_lp_keep_dse_weights: HighsInt,
+    // rusolve: convex MIQP by LP-based outer approximation (mip/oa.rs)
+    pub miqp_oa: bool,
+    pub miqp_oa_disaggregate: bool,
+    pub miqp_oa_lazy_only: bool,
+    // rusolve: mixed-integer SOCP by LP-based outer approximation (mip/oa.rs, misocp_solve.rs)
+    pub misocp_oa: bool,
+    pub misocp_oa_disaggregate: bool,
+    pub misocp_oa_no_polish: bool,
+    pub misocp_oa_lazy_only: bool,
+    // rusolve: which engine `rusolve mip` / MCP `solve` runs, `highs` (the port) or `cpsat` (OR-Tools CP-SAT, an optional build; rusolve-cli/src/cpsat_solve.rs)
+    pub mip_engine: String,
     // rusolve: relax the tableau separator's weight-range and density limits
     pub mip_tableau_loosen: bool,
     pub mip_tableau_loosen_auto: bool,
@@ -254,8 +270,42 @@ pub struct HighsOptions {
     /// rusolve: 0 = HiGHS count-based pseudocost reliability. > 0: sample-variance reliability
     /// (Hendel 2015).
     pub mip_pscost_variance_tol: f64,
+    /// rusolve: child selection rule of the main search's dives, as `HighsSearch::ChildSelectionRule`
+    /// (0 up .. 8 hybrid inference cost). -1 = HiGHS (root-solution rule; sub-MIPs use hybrid).
+    /// Default 8 (rusolve, default on): hybrid in the main search too.
+    pub mip_child_selection: HighsInt,
+    /// rusolve: with `mip_child_selection` set, go back to the HiGHS root-solution rule once the
+    /// relative primal-dual gap is at or below this value. 0 = never switch.
+    pub mip_child_selection_switch_gap: f64,
+    /// rusolve: the plunge levers below act once the relative gap between the global lower bound
+    /// and the upper limit is at or below this value (main search only). 0 = off.
+    pub mip_plunge_gap: f64,
+    /// rusolve: plunge only into nodes with lower bound at most lb + quot * (cutoff - lb)
+    /// (SCIP maxplungequot). 0 = off.
+    pub mip_plunge_quot: f64,
+    /// rusolve: node limit of one plunge while the gap gate holds. 0 = HiGHS (100).
+    pub mip_plunge_max_nodes: HighsInt,
+    /// rusolve: pick the best-bound queue node every this many queue picks while the gap gate
+    /// holds. 0 = HiGHS (10).
+    pub mip_plunge_bestbound_freq: HighsInt,
     /// rusolve: RENS skips its sub-MIP when the fixing rate is below this (0 = off).
     pub mip_rens_min_fixing_rate: f64,
+    /// rusolve: tree-node separation gate (SCIP sepa.c maxbounddist / freq). 1.0 and 1 = HiGHS
+    /// (separate at every node); pool_only keeps the cut-pool round at nodes the gate skips.
+    pub mip_node_sepa_maxbounddist: f64,
+    pub mip_node_sepa_freq: HighsInt,
+    pub mip_node_sepa_pool_only: bool,
+    /// rusolve: at most this many separation rounds at a tree node (SCIP separating/maxrounds).
+    /// 0 = no limit (HiGHS).
+    pub mip_node_sepa_max_rounds: HighsInt,
+    /// rusolve: a node installed from the queue starts its LP from its parent's basis (SCIP
+    /// tree.c, the LP state of the fork). false = HiGHS (the LP keeps its current basis).
+    pub mip_node_install_basis: bool,
+    /// rusolve: round the node LP solution at every k-th dive node (simple rounding, rounding,
+    /// shifting repair; Achterberg 2007 ch. 9). 0 = off (HiGHS).
+    pub mip_node_rounding: HighsInt,
+    /// rusolve: with mip_node_rounding, polish each found point by 1-opt (SCIP heur_oneopt.c).
+    pub mip_node_rounding_polish: bool,
     // rusolve: SCIP 11 heuristics/oneopt, not a 1.15.1 option
     pub mip_heuristic_run_oneopt: bool,
     // rusolve: SCIP 11 heuristics/crossover, not a 1.15.1 option
@@ -267,9 +317,15 @@ pub struct HighsOptions {
     /// rusolve, no HiGHS PR: in the 1.16.0
     /// `strengthenInequalities` cover loop (`mip_strengthen_small_contrib`), stop the loop
     /// for the current row when `slackupper < 0`, the invariant HiGHS asserts but compiles
-    /// out. Off reproduces HiGHS 1.16.0, which can loop forever. On in the recommended
+    /// out, or when the step's value is not positive (a fixed point). Off reproduces HiGHS 1.16.0, which can loop forever. On in the recommended
     /// profile (`RECOMMENDED_MIP_ON`), off in `Default` (1.15.1).
     pub mip_strengthen_cover_guard: bool,
+    /// rusolve, not a HiGHS option: in presolve coefficient strengthening
+    /// (`strengthenCoefs`), set the new coefficient to exactly `±maxAbsCoefValue` instead of
+    /// adding a delta rounded to a double, which on a big-M coefficient cancels to a slightly
+    /// smaller value and can cut off the optimum. On in the recommended profile
+    /// (`RECOMMENDED_MIP_ON`), off in `Default` (1.15.1).
+    pub mip_presolve_exact_strengthen: bool,
     // rusolve ls-gub-swap: GUB swap / ejection-chain moves in
     // LocalMIP (Benoist et al. 2011), not a HiGHS option; acts only with run_local_mip
     pub mip_ls_gub_swap: bool,
@@ -520,7 +576,7 @@ pub const H16_RECOMMENDED_OFF: [&str; 0] = [];
 ///
 /// presolve_fm_obj_reformulation is not in the set: HiGHS 1.16.0 defaults it to false, and
 /// turia runs 33.5 s with it against 13.4 s without.
-pub const RECOMMENDED_MIP_ON: [&str; 25] = [
+pub const RECOMMENDED_MIP_ON: [&str; 26] = [
     "mip_sb_budget_pre_restart",    // HiGHS 1.16.0 #3213
     "mip_dual_fix_probing",         // HiGHS 1.16.0 #3244
     "mip_cdouble_act_contrib",      // HiGHS 1.16.0 #3184
@@ -549,6 +605,9 @@ pub const RECOMMENDED_MIP_ON: [&str; 25] = [
     // would spin forever; search-identical
     // with it off on all 44 instances of our benchmark set, so it only changes runs where 1.16.0 hangs.
     "mip_strengthen_cover_guard",
+    // rusolve, no HiGHS PR: writes the strengthened coefficient exactly where 1.16.0's
+    // rounded delta cancels on a big-M coefficient and cuts off the optimum
+    "mip_presolve_exact_strengthen",
 ];
 
 impl HighsOptions {
@@ -591,6 +650,7 @@ impl HighsOptions {
         self.mip_keep_implications = on;
         self.mip_sym_hash64 = on;
         self.mip_strengthen_cover_guard = on;
+        self.mip_presolve_exact_strengthen = on;
     }
 
     /// Copies every `h16_*`, `mip_*` and `mip_*` flag (the 1.16.0 code switches) from `src`. Used by
@@ -932,6 +992,16 @@ impl Default for HighsOptions {
             mip_cut_selection_hybrid: false,
             mip_knapsack_cover_sepa: false,
             mip_dff_separator: false,
+            mip_lp_skip_refactor_check: false,
+            mip_lp_keep_dse_weights: 0,
+            miqp_oa: false,
+            miqp_oa_disaggregate: false,
+            miqp_oa_lazy_only: false,
+            misocp_oa: false,
+            misocp_oa_disaggregate: false,
+            misocp_oa_no_polish: false,
+            misocp_oa_lazy_only: false,
+            mip_engine: "highs".to_string(),
             mip_tableau_loosen: false,
             mip_tableau_loosen_auto: false,
             mip_ti_precedence_sepa: true,
@@ -947,12 +1017,26 @@ impl Default for HighsOptions {
             mip_node_bigm_active: 0.0,
             mip_cont_prop_improve: 0.05,
             mip_pscost_variance_tol: 0.0,
+            mip_child_selection: 8,
+            mip_child_selection_switch_gap: 0.02,
+            mip_plunge_gap: 0.0,
+            mip_plunge_quot: 0.0,
+            mip_plunge_max_nodes: 0,
+            mip_plunge_bestbound_freq: 0,
             mip_rens_min_fixing_rate: 0.0,
+            mip_node_sepa_maxbounddist: 1.0,
+            mip_node_sepa_freq: 1,
+            mip_node_sepa_pool_only: false,
+            mip_node_sepa_max_rounds: 0,
+            mip_node_install_basis: false,
+            mip_node_rounding: 0,
+            mip_node_rounding_polish: false,
             mip_heuristic_run_oneopt: false,
             mip_heuristic_run_crossover: false,
             mip_heuristic_run_fpr: false,
             mip_heuristic_run_local_mip: false,
             mip_strengthen_cover_guard: false,
+            mip_presolve_exact_strengthen: false,
             mip_ls_gub_swap: false,
             mip_ls_int_lp_repair: false,
             mip_alns: false,

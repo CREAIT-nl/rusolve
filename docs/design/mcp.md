@@ -75,6 +75,22 @@ explicit bounds for every column; <https://lpsolve.sourceforge.net/5.5/mps-forma
 that. A bad entry is a tool error naming its JSON path (`rows[2].terms.z`). Quadratic terms and
 general constraints are written as LP text instead.
 
+The reply is the handle summary; `model_id` (`m1`, `m2`, ... in each server process) is a key of
+`structuredContent` and of the JSON that `content[0].text` holds as a string. Variables default to
+bounds `0` and infinity (`upper: null` is infinite too), so a variable that a `cp` object uses
+needs `upper` written.
+
+An optional `cp` section adds scheduling and combinatorial objects (class `cp`): `intervals`
+`[{name, start, size, end, presence?}]`, `no_overlap` `[{name, intervals}]`, `cumulative`
+`[{name, intervals, demands, capacity}]`, `all_different`, `element`, `table`. `start`, `end`,
+`presence`, `index`, `target` and the `variables` lists name variables declared in `variables`,
+which must be `integer` (`binary` for `presence`) with finite bounds; `end` is mandatory because an
+interval does not create its variables. `size`, `demands`, `values` and `capacity` take an integer
+(`3`, not `3.0`) or a variable name. `no_overlap` and `cumulative` name intervals, not variables.
+The rules, a worked flow and a job shop are in [cp-model.md](cp-model.md) and
+[`docs/skills/scheduling`](../skills/scheduling/SKILL.md); `solve` takes
+`options: {"mip_engine": "cpsat"}` to use CP-SAT.
+
 ### Routing
 
 A model that may hold a quadratic term, a cone or a general constraint is classified once by
@@ -84,9 +100,14 @@ general-constraint model gets a routed handle: `solve` runs `rusolve-cli solve <
 json --include-solution` as a child process, so the answer is the CLI's and a cancel can kill it.
 `solve` (with `time_limit`, `include_solution`), `get_solution` and `free_model` work on it; the
 tools that need the live LP (`modify`, `check_solution`, `explain`, `lint`, `ranging`,
-`feasrelax`) answer with the class and the tools that do work, and `options`, `warm_start` and
-the wasm arguments are refused rather than ignored. A class nothing solves (nonconvex, MIQP,
-mixed-integer conic) is refused at load with the class and the reason.
+`feasrelax`) answer with the class and the tools that do work, and `warm_start` and the wasm
+arguments are refused rather than ignored. A convex MIQP and a mixed-integer conic model load too
+(class `miqp` or `mi_conic`, engine `oa`), but their outer-approximation engine is experimental
+and off by default (slower): `solve` runs it only with `options` `{"miqp_oa": true}` or
+`{"misocp_oa": true}` (only `miqp_oa*` and `misocp_oa*` names are accepted there, handed to the
+child as `RUSOLVE_EKK_OPTS`); without the lever `solve` fails with the message that names it. A
+class nothing solves (nonconvex Q, nonconvex quadratic rows, general constraints with quadratic
+terms) is refused at load with the class and the reason.
 
 ## Prompts and resources
 

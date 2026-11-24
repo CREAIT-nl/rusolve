@@ -98,6 +98,30 @@ m.set_quadratic_objective(Q)     # objective = c'x + (1/2) x'Qx; Q: matrix, {(i,
 #        length num_vars. Replaces the whole objective (other costs become 0); a LinExpr's
 #        constant becomes the objective offset. add_vars(cost=...) also sets costs.
 
+# --- general constraints (model/gencon.rs): each returns the object's name -------------------
+m.add_indicator(z, 0, x + y <= 5, name=None)   # binary z; value 0/1; one-sided or equality row
+m.add_sos1(vars, weights=None); m.add_sos2(vars, weights=None)
+m.add_pwl(x, y, xs, ys)                        # y = f(x), xs non-decreasing, x within [xs[0], xs[-1]]
+m.add_abs(res, arg); m.add_max(res, args, constant=None); m.add_min(res, args, constant=None)
+m.add_and(res, args); m.add_or(res, args); m.add_not(res, arg)     # binaries
+#   Stored as the typed rusolve-io objects; solve() linearizes a copy (rusolve-cli gc_solve) and
+#   reports `sol.general_constraints`; check() and write() use the objects. Malformed: RS4009;
+#   explain/iis/ranging/feasrelax/diagnose, solve(callback=) and a Hessian refuse: RS4010.
+
+# --- scheduling and combinatorial objects (model/cp.rs; docs/design/cp-model.md) -------------
+iv = m.add_interval(start, size, end=None, presence=None, name=None)   # -> Interval handle
+#   start/end: integer Vars with finite bounds (end=None makes `<name>_end`); size: int or Var >= 0;
+#   presence: binary Var, 0 = absent (takes part in nothing).
+m.add_no_overlap(intervals, name=None); m.add_cumulative(intervals, demands, capacity, name=None)
+m.add_all_different(vars, name=None); m.add_element(index, values, target, name=None)
+m.add_table(vars, tuples, negated=False, name=None)       # each returns the object's name
+m.num_cp_objects
+#   Stored as the typed rusolve-io objects (`CpModel`); solve() goes through
+#   `rusolve_cli::cp_solve::solve_with` (engine hook; today the MIP linearization), reports
+#   `sol.cp` (None for a plain model) and the envelope `cp` object; check() uses the objects.
+#   Malformed: RS4011; the fallback cannot take a valid object: RS4013; explain/iis/ranging/
+#   feasrelax/diagnose/write, solve(callback=) and a Hessian refuse: RS4012.
+
 # --- solve -----------------------------------------------------------------------------------
 sol = m.solve(time_limit=None, mip_gap=None, threads=None, presolve=None, seed=None,
               verbose=False, options=None)          # options: {raw_option_name: value}

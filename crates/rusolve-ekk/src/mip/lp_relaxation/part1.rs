@@ -193,6 +193,29 @@ impl HighsLpRelaxation {
         );
         this.lpsolver
             .set_option_value_double("dual_feasibility_tolerance", mip_dual_feasibility_tolerance);
+        // rusolve lever (default off, not in HiGHS): most LP solves of a MIP search are short
+        // node and sub-MIP re-solves, and each optimality rebuild runs one FTRAN and one BTRAN
+        // (HEkk::factorSolveError) to test the updated factor before keeping it. A tolerance
+        // <= 0 is the HiGHS option value that skips the test and keeps the factor.
+        if ms.options_mip_.mip_lp_skip_refactor_check {
+            this.lpsolver
+                .set_option_value_double("rebuild_refactor_solution_error_tolerance", 0.0);
+        }
+        // rusolve lever (default off, not in HiGHS): keep the dual steepest-edge weights by
+        // variable across the basis restores and cut row changes of the search, see
+        // simplex/ekk/dse_keep.rs.
+        if ms.options_mip_.mip_lp_keep_dse_weights > 0 {
+            this.lpsolver.set_option_value_int(
+                "mip_lp_keep_dse_weights",
+                ms.options_mip_.mip_lp_keep_dse_weights,
+            );
+        }
+        // rusolve lever (default off, not in HiGHS): `storeBasis` records the cut rows of each
+        // stored basis, see node_basis.rs.
+        if ms.options_mip_.mip_node_install_basis {
+            this.lpsolver
+                .set_option_value_bool("mip_node_install_basis", true);
+        }
         this.status = HighsLpRelaxation_Status::kNotSet;
         this.numlpiters = 0;
         this.avg_solve_iters = 0.0;

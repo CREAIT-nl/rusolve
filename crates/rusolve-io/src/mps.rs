@@ -1124,6 +1124,7 @@ pub fn read_mps_conic_order(text: &str) -> Result<(Model, MpsFileOrder), MpsErro
         hessian: q_entries,
         gc,
         conic: ConicBlock { quad_rows, cones },
+        cp: Default::default(),
     };
     Ok((model, file_order))
 }

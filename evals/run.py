@@ -36,8 +36,9 @@ import rusolve as rs  # noqa: E402
 
 TASKS = ["solve_report", "debug_infeasible", "verify_formulation", "tune_family", "add_cuts", "extend_wasm",
          "class_router", "class_flow", "class_cover", "class_scheduling", "class_lotsizing", "class_facility",
-         "class_routing", "class_pwl_semi", "class_qp",
-         "diet_plan", "project_selection", "fixed_charge_supply", "shift_cover", "mcp_build_model"]
+         "class_routing", "class_pwl_semi", "class_qp", "class_conic", "class_miqp", "class_misocp",
+         "diet_plan", "project_selection", "fixed_charge_supply", "shift_cover", "mcp_build_model", "supplier_sourcing",
+         "class_cp_scheduling"]
 MODES = ["mcp", "cli", "python", "highs-mcp"]
 
 MCP_NOTE = ("\n\nYou are connected to the rusolve solver through MCP tools (load_model, solve, get_solution, "

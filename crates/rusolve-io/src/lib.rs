@@ -20,6 +20,8 @@
 use std::io::{BufRead as _, Read as _};
 
 pub mod conic;
+pub mod cp;
+pub mod cp_lin;
 pub mod diag;
 pub mod gc;
 pub mod gc_lin;
@@ -30,6 +32,10 @@ pub mod mof;
 pub mod mps;
 pub mod nl;
 
+pub use cp::{
+    AllDifferent, CpError, CpErrorKind, CpModel, CpTerm, CpTol, CpViolation, Cumulative, Element,
+    Interval, NoOverlap, Table,
+};
 pub use gc::{
     FuncCon, FuncKind, GcModel, GcTol, GcViolation, Indicator, Pwl, SemiVar, SosKind, SosSet,
 };

@@ -2,7 +2,7 @@
   "name": "rusolve-skills",
   "displayName": "rusolve solver playbooks",
   "version": "0.1.0",
-  "description": "Agent playbooks for the rusolve LP/MIP/QP solver: start-here router, solve, debug-infeasible, tune, extend, and problem-class formulations (flow, cover, scheduling, lot-sizing, facility location, routing, piecewise/semi-continuous, convex QP).",
+  "description": "Agent playbooks for the rusolve LP/MIP/QP solver: start-here router, solve, debug-infeasible, tune, extend, and problem-class formulations (flow, cover, scheduling, lot-sizing, facility location, routing, piecewise/semi-continuous, convex QP, conic).",
   "author": {
     "name": "rusolve contributors"
   },
@@ -16,6 +16,7 @@
   ],
   "skills": [
     "./docs/skills/assignment-transport-flow",
+    "./docs/skills/conic",
     "./docs/skills/convex-qp",
     "./docs/skills/debug-infeasible",
     "./docs/skills/extend",

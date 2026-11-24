@@ -83,6 +83,9 @@ pub struct HighsNodeQueue_OpenNode {
     pub hybrid_estim_links: RbTreeLinks<i64>,
     /// rusolve mip_symmetry_dynamic: branching path of this open node; None when mip_symmetry_dynamic is off.
     pub(crate) s3_path: Option<Arc<S3PathNode>>,
+    /// rusolve mip_node_install_basis: the basis the node's parent stored (shared with its
+    /// siblings), installed when the node is taken from the queue; None when the flag is off.
+    pub(crate) basis: Option<Arc<HighsBasis>>,
 }
 
 impl HighsNodeQueue {
@@ -461,32 +464,44 @@ impl HighsNodeQueue {
         depth: HighsInt,
         s3_path: Option<Arc<S3PathNode>>,
     ) -> f64 {
+        self.emplace_node_ext(
+            domchgs,
+            branch_positions,
+            lower_bound,
+            estimate,
+            depth,
+            s3_path,
+            None,
+        )
+    }
+
+    /// rusolve mip_symmetry_dynamic / mip_node_install_basis: copy of emplace_node that also
+    /// stores the branching path and the parent basis; emplace_node is unchanged.
+    #[allow(clippy::too_many_arguments)]
+    pub(crate) fn emplace_node_ext(
+        &mut self,
+        domchgs: Vec<HighsDomainChange>,
+        branch_positions: Vec<HighsInt>,
+        lower_bound: f64,
+        estimate: f64,
+        depth: HighsInt,
+        s3_path: Option<Arc<S3PathNode>>,
+        basis: Option<Arc<HighsBasis>>,
+    ) -> f64 {
         let pos: i64;
 
         debug_assert!(estimate != kHighsInf);
 
+        let mut node =
+            HighsNodeQueue_OpenNode::new_2(domchgs, branch_positions, lower_bound, estimate, depth);
+        node.s3_path = s3_path;
+        node.basis = basis;
         if self.freeslots.is_empty() {
             pos = self.nodes.len() as i64;
-            let mut node = HighsNodeQueue_OpenNode::new_2(
-                domchgs,
-                branch_positions,
-                lower_bound,
-                estimate,
-                depth,
-            );
-            node.s3_path = s3_path;
             self.nodes.push(node);
         } else {
             pos = self.freeslots.peek().expect("freeslots is non-empty").0;
             self.freeslots.pop();
-            let mut node = HighsNodeQueue_OpenNode::new_2(
-                domchgs,
-                branch_positions,
-                lower_bound,
-                estimate,
-                depth,
-            );
-            node.s3_path = s3_path;
             self.nodes[pos as usize] = node;
         }
 
@@ -669,6 +684,7 @@ impl HighsNodeQueue_OpenNode {
             lower_links: RbTreeLinks::default(),
             hybrid_estim_links: RbTreeLinks::default(),
             s3_path: None,
+            basis: None,
         }
     }
 
@@ -691,6 +707,7 @@ impl HighsNodeQueue_OpenNode {
             lower_links: RbTreeLinks::default(),
             hybrid_estim_links: RbTreeLinks::default(),
             s3_path: None,
+            basis: None,
         }
     }
 

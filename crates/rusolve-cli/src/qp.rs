@@ -59,6 +59,34 @@ fn type_counts(m: &Model) -> (usize, usize, usize, bool) {
     (c, b, i, fin)
 }
 
+/// The convexity verdict of a model with integer columns and a Hessian, for the outer-
+/// approximation route: `Ok` only when Q is positive semidefinite (negative semidefinite for a
+/// maximisation) with no rounding shift, because the tangent cuts are valid for the Q as written
+/// and for no shifted one. The message says why not otherwise.
+pub fn assess_miqp(model: &Model) -> Result<QpAssessment, String> {
+    let maximize = model.obj_sense == ObjSense::Maximize;
+    let (cont, bin, other, finite_bound) = type_counts(model);
+    let cvx = analyze(model.num_variables, &model.hessian, maximize);
+    let class = class_code(&cvx, cont, bin, other, model.num_constraints, finite_bound);
+    match cvx.verdict {
+        Verdict::Convex => Ok(QpAssessment {
+            convexity: cvx,
+            class,
+            maximize,
+        }),
+        Verdict::ConvexWithShift => Err(format!(
+            "Q is convex only after a rounding shift of {:e}; outer approximation needs the exact convex Q",
+            cvx.shift
+        )),
+        Verdict::Nonconvex => Err(
+            "Q is not positive semidefinite (negative semidefinite for a maximisation)".to_string(),
+        ),
+        Verdict::Unverified => {
+            Err("convexity of Q could not be verified within the work cap".to_string())
+        }
+    }
+}
+
 /// Test the objective Hessian of `model` (which must have one). `Err` for a nonconvex Q or a
 /// QP with integer variables.
 pub fn assess(model: &Model) -> Result<QpAssessment, QpRefusal> {

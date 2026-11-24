@@ -482,8 +482,9 @@ impl HEkk {
         // the corresponding RHS, and then checks the 50 solution values.
         let num_col: HighsInt = self.lp_.num_col_;
         let num_row: HighsInt = self.lp_.num_row_;
-        let mut btran_rhs = HVector::default();
-        let mut ftran_rhs = HVector::default();
+        // PORT NOTE (perf): recycled storage, same values as fresh vectors (HVectorPool).
+        let mut btran_rhs = self.hvector_pool_.take();
+        let mut ftran_rhs = self.hvector_pool_.take();
         btran_rhs.setup(num_row);
         ftran_rhs.setup(num_row);
 
@@ -494,8 +495,9 @@ impl HEkk {
         let ideal_solution_num_nz: HighsInt = 50;
         let solution_num_nz: HighsInt = cpp_min(ideal_solution_num_nz, (num_row + 1) / 2);
         debug_assert!(solution_num_nz > 0);
-        let mut solution_value: Vec<f64> = Vec::new();
-        let mut solution_index: Vec<HighsInt> = Vec::new();
+        // PORT NOTE (perf): sized up front; C++ grows them by push_back.
+        let mut solution_value: Vec<f64> = Vec::with_capacity(solution_num_nz as usize);
+        let mut solution_index: Vec<HighsInt> = Vec::with_capacity(solution_num_nz as usize);
         let mut solution_nonzero: Vec<i8> = vec![0; num_row as usize];
         loop {
             let i_row = random.integer_sup(num_row);
@@ -561,6 +563,8 @@ impl HEkk {
                 btran_solution_error,
             );
         }
+        self.hvector_pool_.give(btran_rhs);
+        self.hvector_pool_.give(ftran_rhs);
         cpp_max(ftran_solution_error, btran_solution_error)
     }
 

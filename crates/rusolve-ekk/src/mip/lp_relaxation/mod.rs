@@ -8,6 +8,7 @@ use crate::prelude::*;
 use std::sync::Arc;
 
 mod local_bigm;
+mod node_basis;
 pub use local_bigm::*;
 mod part1;
 pub use part1::*;
@@ -449,7 +450,22 @@ impl HighsLpRelaxation {
     /// C++: `void storeBasis()`
     pub fn store_basis(&mut self) {
         if !self.currentbasisstored && self.lpsolver.get_basis().valid {
-            self.basischeckpoint = Some(Arc::new(self.lpsolver.get_basis().clone()));
+            let mut basis = self.lpsolver.get_basis().clone();
+            // rusolve lever `mip_lp_keep_dse_weights` = 2 (not in HiGHS): store the weights of
+            // this basis with it, so that `recover_basis` restores them (simplex/ekk/dse_keep.rs).
+            if self.lpsolver.options_.mip_lp_keep_dse_weights == 2 {
+                basis.dse_weight = self
+                    .lpsolver
+                    .ekk_instance_
+                    .dse_weights_by_variable()
+                    .map(Arc::new);
+            }
+            // rusolve lever `mip_node_install_basis` (not in HiGHS): the cut rows of this
+            // basis, so that a node installed later can match them to its LP (node_basis.rs).
+            if self.lpsolver.options_.mip_node_install_basis {
+                basis.row_keys = Some(Arc::new(self.cut_row_keys()));
+            }
+            self.basischeckpoint = Some(Arc::new(basis));
             self.currentbasisstored = true;
         }
     }

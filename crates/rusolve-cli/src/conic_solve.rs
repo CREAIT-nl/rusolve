@@ -120,14 +120,14 @@ impl fmt::Display for ConicError {
     }
 }
 
-fn col_name(m: &Model, j: usize) -> String {
+pub(crate) fn col_name(m: &Model, j: usize) -> String {
     match m.col_names.get(j) {
         Some(n) if !n.is_empty() => n.clone(),
         _ => format!("c{j}"),
     }
 }
 
-fn row_name(m: &Model, i: usize) -> String {
+pub(crate) fn row_name(m: &Model, i: usize) -> String {
     match m.row_names.get(i) {
         Some(n) if !n.is_empty() => n.clone(),
         _ => format!("r{i}"),
@@ -190,7 +190,7 @@ fn csc(m: usize, n: usize, mut t: Vec<(usize, usize, f64)>) -> CscMatrix<f64> {
     CscMatrix::new(m, n, colptr, rowval, nzval)
 }
 
-fn refusal_error(m: &Model, row: &str, side: &'static str, r: Refusal) -> ConicError {
+pub(crate) fn refusal_error(m: &Model, row: &str, side: &'static str, r: Refusal) -> ConicError {
     match r {
         Refusal::Indefinite { var, other, pivot } => ConicError::NonconvexRow {
             row: row.to_string(),

@@ -215,6 +215,50 @@ def class_qp(path):
     write_lp(path, "Minimize", obj, rows, [f"0 <= w{i} <= 1" for i in range(4)])
 
 
+def class_conic(path):
+    """Revenue maximisation under an ellipsoidal risk budget: a convex quadratic row (a second-order
+    cone constraint written as a quadratic row) and a linear budget; no integers."""
+    rows = [("risk", "[ 0.04 a ^ 2 + 0.09 b ^ 2 + 0.16 c ^ 2 + 0.02 a * b ] <= 1"), ("budget", "a + b + c <= 10")]
+    write_lp(path, "Maximize", "4 a + 3 b + 2 c", rows, ["0 <= a <= 10", "0 <= b <= 10", "0 <= c <= 10"])
+
+
+def class_miqp(path):
+    """Cardinality-constrained portfolio (convex MIQP): the class_qp assets, risk aversion 10, at most two
+    assets held, each at least 10 % when held; the objective is -mu'w + 5 w'cov w."""
+    mu = [0.05, 0.08, 0.11, 0.14]
+    cov = [[0.04, 0.006, 0.002, 0.0], [0.006, 0.09, 0.012, 0.01], [0.002, 0.012, 0.16, 0.03], [0.0, 0.01, 0.03, 0.25]]
+    q = []
+    for i in range(4):
+        for j in range(i, 4):
+            q.append(f"{cov[i][j] * 20:g} w{i} * w{j}" if i != j else f"{cov[i][i] * 10:g} w{i} ^ 2")
+    obj = " ".join(f"- {mu[i]} w{i}" for i in range(4)) + " + [ " + " + ".join(q) + " ] / 2"
+    rows = [("budget", _sum(f"w{i}" for i in range(4)) + " = 1"), ("cardinality", _sum(f"y{i}" for i in range(4)) + " <= 2")]
+    rows += [(f"hi_{i}", f"w{i} - y{i} <= 0") for i in range(4)]
+    rows += [(f"lo_{i}", f"w{i} - 0.1 y{i} >= 0") for i in range(4)]
+    write_lp(path, "Minimize", obj, rows, [f"0 <= w{i} <= 1" for i in range(4)], binaries=[f"y{i}" for i in range(4)])
+
+
+def class_misocp(path):
+    """Mixed-integer convex quadratic rows: whole batches a, b and a fractional amount c, an energy
+    row a^2 + 2 b^2 + c^2 <= 40 and a weight row; maximise 5a + 4b + 3c."""
+    rows = [("energy", "[ a ^ 2 + 2 b ^ 2 + c ^ 2 ] <= 40"), ("weight", "a + b + c <= 8")]
+    write_lp(path, "Maximize", "5 a + 4 b + 3 c", rows, ["0 <= a <= 6", "0 <= b <= 6", "0 <= c <= 10"], generals=["a", "b"])
+
+
+def supplier_sourcing_reference(path):
+    """Reference model of the word problem `supplier_sourcing` (general constraints), written by hand
+    with the names the prompt dictates."""
+    rows = [("demand", "qA + qB + qC >= 100")]
+    gcs = ["g_largest: largest = MAX ( qA , qB , qC )"]
+    out = ["Minimize", " obj: 9 qA + 7 qB + 8 qC + 120 useB + 0.2 largest", "Subject To",
+           " demand: qA + qB + qC >= 100", " b_off: useB = 0 -> qB <= 0", " b_min: useB = 1 -> qB >= 25",
+           "Bounds", " 0 <= qA <= 60", " 0 <= qB <= 70", " 0 <= qC <= 50", " 0 <= largest <= 70",
+           "Binaries", " useB", "SOS", " a_or_c: S1 :: qA : 1 qC : 2", "General Constraints"] + [f" {g}" for g in gcs] + ["End"]
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "w") as f:
+        f.write("\n".join(out) + "\n")
+
+
 def main():
     t = os.path.join(HERE, "tasks")
     infeasible_plan(f"{t}/debug_infeasible/model.mps")
@@ -226,15 +270,17 @@ def main():
     # tune_family: three instances of one family (same generator, different seeds).
     for s in (1, 2, 3):
         multi_knapsack(f"{t}/tune_family/inst{s}.mps", f"FAM{s}", 40, 5, 100 + s)
-    # extend_wasm: 30 items, 4 constraints, seed 7. The default ported search needs 912 nodes
-    # here (measured, `rusolve mip --format json --seed 0`), so a node-selection rule has a real
-    # tree to improve; the evals/tasks/extend_wasm README records the numbers.
+    # extend_wasm: 30 items, 4 constraints, seed 7. The search with the HiGHS child rule needs 912
+    # nodes here (measured, `rusolve mip --format json --seed 0 --opt mip_child_selection=-1`), so a
+    # node-selection rule has a real tree to improve; the evals README records the numbers.
     multi_knapsack(f"{t}/extend_wasm/model.mps", "WASMEXT", 30, 4, 7)
     # Problem-class tasks (docs/skills): one model per playbook.
     for name, fn in [("flow", class_flow), ("cover", class_cover), ("scheduling", class_scheduling),
                      ("lotsizing", class_lotsizing), ("facility", class_facility), ("routing", class_routing),
-                     ("pwl_semi", class_pwl_semi), ("qp", class_qp)]:
+                     ("pwl_semi", class_pwl_semi), ("qp", class_qp), ("conic", class_conic),
+                     ("miqp", class_miqp), ("misocp", class_misocp)]:
         fn(f"{t}/class_{name}/model.lp")
+    supplier_sourcing_reference(f"{t}/supplier_sourcing/selfcheck/reference.lp")
 
 
 if __name__ == "__main__":

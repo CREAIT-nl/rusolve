@@ -142,9 +142,9 @@ impl HFactor {
         self.num_basic = num_basic_;
         self.inv_num_row = 1.0 / self.num_row as f64;
         self.a_matrix_valid = true;
-        self.a_start = a_start_.to_vec();
-        self.a_index = a_index_.to_vec();
-        self.a_value = a_value_.to_vec();
+        copy_into(&mut self.a_start, a_start_);
+        copy_into(&mut self.a_index, a_index_);
+        copy_into(&mut self.a_value, a_value_);
         self.pivot_threshold = cpp_max(
             kMinPivotThreshold,
             cpp_min(pivot_threshold_, kMaxPivotThreshold),
@@ -320,9 +320,9 @@ impl HFactor {
         a_index_: &[HighsInt],
         a_value_: &[f64],
     ) {
-        self.a_start = a_start_.to_vec();
-        self.a_index = a_index_.to_vec();
-        self.a_value = a_value_.to_vec();
+        copy_into(&mut self.a_start, a_start_);
+        copy_into(&mut self.a_index, a_index_);
+        copy_into(&mut self.a_value, a_value_);
         self.a_matrix_valid = true;
     }
 
@@ -671,4 +671,13 @@ impl HFactor {
         self.u_index.clear();
         self.u_value.clear();
     }
+}
+
+/// PORT NOTE (perf): C++ `HFactor` keeps pointers to the caller's matrix; the port keeps a
+/// copy, refreshed on every LP solve. Copying into the existing buffer (same values as
+/// `to_vec`) avoids a reallocation per solve.
+#[inline]
+fn copy_into<T: Copy>(dst: &mut Vec<T>, src: &[T]) {
+    dst.clear();
+    dst.extend_from_slice(src);
 }

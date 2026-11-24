@@ -67,6 +67,9 @@ pub struct HighsSearch {
     pub reliableatnode: HighsHashTable<HighsInt, i32>,
     /// rusolve mip_symmetry_dynamic: dynamic-symmetry statistics for this search; no C++ counterpart.
     pub(crate) s3_stats: S3Stats,
+    /// rusolve `mip_plunge_quot`: set by `dive` when it stops because the new child's lower
+    /// bound is above the plunge bound; the main loop then ends the plunge. No C++ counterpart.
+    pub(crate) plunge_bound_stop: bool,
 }
 
 /// HiGHS: C++ plain `enum ReliableFlags` nested in `HighsSearch` (values are associated consts).

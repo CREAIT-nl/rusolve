@@ -1,0 +1,6 @@
+{
+  "id": "class_miqp",
+  "title": "Cardinality-constrained portfolio (convex MIQP)",
+  "kind": "class-qp",
+  "prompt": "The file {dir}/model.lp is a portfolio with a quadratic objective and binary variables y0..y3 that limit how many assets are held. Solve it with rusolve and report the class that `rusolve mip --format json` assigns, the engine that solved it, the status, the objective, the weights w0..w3 rounded to 4 decimals, the list of held assets (the y variables equal to 1), and the playbook skill that fits (one of: rusolve-assignment-transport-flow, rusolve-set-cover-packing, rusolve-scheduling, rusolve-lot-sizing, rusolve-facility-location, rusolve-routing, rusolve-piecewise-semi, rusolve-convex-qp, rusolve-conic). If rusolve refuses the model, read the message and the skill: they say how it can be solved.\n\nEnd your final message with one line of the form\nANSWER: {\"class\": \"<class>\", \"engine\": \"<engine>\", \"status\": \"<status>\", \"objective\": <number>, \"weights\": [<w0>, <w1>, <w2>, <w3>], \"held\": [\"<y name>\", ...], \"playbook\": \"<skill name>\"}"
+}

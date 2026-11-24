@@ -6,8 +6,9 @@ The HiGHS MIP solver: `HighsMipSolver`, LP relaxation, domain propagation, cut g
 - `mip_solver.rs`, `mip_worker.rs`, `mip_solver_data/`, `search/`, `lp_relaxation/`, `node_queue.rs`, `pseudocost.rs`, `mip_stats.rs`.
 - `domain/`, `implications.rs`, `clique_table/`, `conflict_pool.rs`, `conflict_resolution/`, `cdcl_uip.rs`, `cdcl_dive.rs`.
 - Cuts: `cut_generation.rs`, `cut_pool.rs`, `cut_selection/`, `separation.rs`, `separator.rs` and one `*_separator.rs` per family.
-- Heuristics: `primal_heuristics/`, `fpr_local_mip/`, `feasibility_jump.rs`, `fj_native.rs`, `scip_heuristics/`, `ls_int_lp_repair.rs`.
+- Heuristics: `primal_heuristics/`, `fpr_local_mip/`, `feasibility_jump.rs`, `fj_native.rs`, `scip_heuristics/`, `ls_int_lp_repair.rs`, `node_rounding.rs` (LP-free rounding at dive nodes, lever `mip_node_rounding`, called from `search/part2.rs`).
 - `hooks.rs`: the `MipHooks` extension trait (`docs/design/hooks.md`); `race.rs`, `redcost_fixing.rs`, `debug_sol.rs`.
+- `oa.rs`, `lazy.rs`: convex MIQP outer approximation (separator, exactness oracle, lazy-constraint loop; `docs/design/miqp-oa.md`), lever `miqp_oa` default off. They also hold the cone block (`OaCone`, `Aff`, optional disaggregation, `Polisher` hook, `LazyConstraints::before_resolve`) of the mixed-integer SOCP route, `docs/design/misocp-oa.md`, levers `misocp_oa*` default off; unit tests: `cargo test -p rusolve-ekk --lib mip::oa`.
 
 ## HiGHS files mirrored
 `mip/HighsMipSolver*.cpp`, `HighsMipSolverData.cpp`, `HighsSearch.cpp`, `HighsLpRelaxation.cpp`, `HighsDomain.cpp`, `HighsCutGeneration.cpp`, `Highs*Separator.cpp`, `HighsPrimalHeuristics.cpp`, `HighsCliqueTable.cpp`, `HighsConflictPool.cpp`. Table: `docs/agent/codemap.md`.

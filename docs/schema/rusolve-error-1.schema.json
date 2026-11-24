@@ -21,6 +21,7 @@
         "message": { "type": "string" },
         "class": { "description": "The router class name for unsupported_class (nonconvex_qp, miqp, nonconvex_qcqp, mi_conic, gc_quadratic); the QPLIB-style code for the QP front's own kinds.", "type": "string" },
         "reason": { "type": "string" },
+        "hint": { "description": "For miqp (convex Q) and mi_conic: the experimental engine that takes the class, the exact option that turns it on (miqp_oa=true, misocp_oa=true) and why it is off by default.", "type": "string" },
         "convexity": { "enum": ["convex", "nonconvex"] },
         "eigenvalue": { "type": "number" },
         "eigenvalue_kind": { "enum": ["smallest", "largest"] },

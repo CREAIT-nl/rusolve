@@ -1,0 +1,9 @@
+{
+  "id": "supplier_sourcing",
+  "title": "Source ore from three suppliers (general constraints)",
+  "kind": "model",
+  "modes": [
+    "python"
+  ],
+  "prompt": "A plant must buy at least 100 tons of ore from three suppliers A, B and C, in fractional tons. Supplier A charges 9 per ton and can deliver at most 60 tons; B charges 7 per ton, at most 70 tons; C charges 8 per ton, at most 50 tons. If B delivers anything, it must deliver at least 25 tons and the plant pays a fixed fee of 120. Suppliers A and C refuse to both deliver in the same period: at most one of them delivers. Freight is charged at 0.2 per ton of the largest single delivery (the maximum of the three deliveries). Minimise total cost: purchases plus the fee plus freight.\nName the variables `qA`, `qB`, `qC` (tons delivered), `useB` (1 if B delivers, else 0) and `largest` (tons in the largest delivery).\n\nReport values at the full precision the solver returns.\n\nEnd your final message with one line of the form\nANSWER: {\"status\": \"<solution status string>\", \"objective\": <number>, \"plan\": {\"<variable name>\": <value>, ...}}\nwhere `plan` lists every variable named above by exactly the name given (zeros may be left out), and `status` is \"Optimal\" when the solver proves optimality."
+}

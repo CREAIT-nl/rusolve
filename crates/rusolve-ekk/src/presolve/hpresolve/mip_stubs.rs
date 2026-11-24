@@ -784,6 +784,21 @@ impl HPresolve {
                     break;
                 }
                 step = cdouble_min(step, maxviolation / coverrhs);
+                // rusolve guard (mip_strengthen_cover_guard), second exit: a step whose value
+                // is not positive. With exact arithmetic every term of the minimum is positive
+                // (reduced costs above smallVal, maxviolation above smallVal). A step of value 0
+                // comes from a reduced cost stored as a HighsCDouble whose two parts have grown
+                // into a huge cancelling pair after repeated divisions: the iteration then
+                // leaves maxviolation, the reduced costs and the index set as they are, so the
+                // next one repeats it forever. Like the exit above, it stops before any state of
+                // this iteration is written. HiGHS later renormalises both division operators
+                // (PR #3687), which keeps such pairs from forming.
+                let step_value = f64::from(step);
+                if self.options.mip_strengthen_cover_guard
+                    && (step_value <= 0.0 || step_value.is_nan())
+                {
+                    break;
+                }
                 maxviolation -= step * coverrhs;
 
                 // only the cover members' reduced costs change, so only they can become

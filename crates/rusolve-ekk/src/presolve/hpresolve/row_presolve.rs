@@ -705,6 +705,30 @@ impl HPresolve {
             }
         }
 
+        /// rusolve (mip_presolve_exact_strengthen): make the strengthened coefficient equal to
+        /// `target` (the nearest double to the intended `±maxAbsCoefValue`). `strengthenCoefs`
+        /// adds `double(delta)` to the old coefficient, and when the old coefficient is large
+        /// (a big-M of 1e8) `delta` is close to it in magnitude, so rounding `delta` to a
+        /// double loses the low digits: -1e8 + double(1e8 - 5.923) is -5.9229999929666519, not
+        /// -5.923. The row is then tighter than intended and can cut off the optimum (with
+        /// coefficients 0.784 and 5.139 the point with all three binaries at 1 is lost). When
+        /// the coefficient left by the first add is within a factor of two of `target` (the
+        /// usual case), `target - current` is exact (Sterbenz lemma) and the second add lands
+        /// exactly on `target`. Going through `add_to_matrix` keeps the implied-bound bookkeeping.
+        fn set_strengthened_coef(this: &mut HPresolve, row: HighsInt, col: HighsInt, target: f64) {
+            let pos = this.find_nonzero(row, col);
+            if pos == -1 {
+                return;
+            }
+            let correction = target - this.a_value[pos as usize];
+            // Errors at round-off level (at most 7e-14 relative on 20 MIPLIB 2017 instances)
+            // are left alone, so the search only changes where the cancellation lost
+            // real digits (about 1e-9 on a 1e8 big-M).
+            if correction.abs() > 1e-12 * target.abs().max(1.0) {
+                this.add_to_matrix(row, col, correction);
+            }
+        }
+
         /// C++ `strengthenCoefs` lambda (inside the inequality branch).
         fn strengthen_coefs(
             this: &mut HPresolve,
@@ -743,6 +767,10 @@ impl HPresolve {
                     // existing matrix coefficient to get delta
                     let delta = (direction as f64) * (max_abs_coef_value - val);
                     this.add_to_matrix(row, col, f64::from(delta));
+                    if this.options.mip_presolve_exact_strengthen {
+                        let target = (direction as f64) * f64::from(max_abs_coef_value);
+                        set_strengthened_coef(this, row, col, target);
+                    }
                     *rhs += delta * col_upper;
                 } else if val < -max_abs_coef_value - this.primal_feastol {
                     debug_assert!(col_lower != -kHighsInf);
@@ -750,6 +778,10 @@ impl HPresolve {
                     // subtract existing matrix coefficient to get delta
                     let delta = ((-direction) as f64) * (max_abs_coef_value + val);
                     this.add_to_matrix(row, col, f64::from(delta));
+                    if this.options.mip_presolve_exact_strengthen {
+                        let target = ((-direction) as f64) * f64::from(max_abs_coef_value);
+                        set_strengthened_coef(this, row, col, target);
+                    }
                     *rhs += delta * col_lower;
                 }
             }
@@ -1754,5 +1786,102 @@ mod h16_row_presolve_tests {
             "option on: epsilon floor rejects the tightening"
         );
         assert_eq!(lower[1], 1e-17, "option off: 1.15.1 tolerance accepts it");
+    }
+
+    /// rusolve `mip_presolve_exact_strengthen`: `min -10 x1 - 10 x2 + x3` subject to
+    /// `0.784 x1 + 5.139 x2 - 1e8 x3 <= 0`, all binary. The optimum is x = (1, 1, 1),
+    /// objective -19, exactly feasible. Coefficient strengthening replaces -1e8 by
+    /// -(0.784 + 5.139); the 1.16.0 code adds a delta rounded to a double and gets
+    /// -5.9229999929666519, which cuts off the optimum (HiGHS 1.15.1 and 1.16.0 return -9).
+    fn bigm_strengthen_lp() -> HighsLp {
+        let mut lp = HighsLp::default();
+        lp.num_col_ = 3;
+        lp.num_row_ = 1;
+        lp.col_cost_ = vec![-10.0, -10.0, 1.0];
+        lp.col_lower_ = vec![0.0; 3];
+        lp.col_upper_ = vec![1.0; 3];
+        lp.row_lower_ = vec![-kHighsInf];
+        lp.row_upper_ = vec![0.0];
+        lp.integrality_ = vec![HighsVarType::kInteger; 3];
+        lp.a_matrix_.format_ = MatrixFormat::kColwise;
+        lp.a_matrix_.num_col_ = 3;
+        lp.a_matrix_.num_row_ = 1;
+        lp.a_matrix_.start_ = vec![0, 1, 2, 3];
+        lp.a_matrix_.index_ = vec![0, 0, 0];
+        lp.a_matrix_.value_ = vec![0.784, 5.139, -1e8];
+        lp
+    }
+
+    /// The x3 coefficient after one `row_presolve` of the big-M row.
+    fn bigm_strengthened_coef(exact: bool) -> f64 {
+        let mut options = HighsOptions::default();
+        options.output_flag = false;
+        options.mip_presolve_exact_strengthen = exact;
+        let mut presolve = HPresolve::default();
+        let timer = Some(crate::util::highs_timer::HighsTimer::new());
+        assert!(presolve.ok_set_input(
+            bigm_strengthen_lp(),
+            &options,
+            options.presolve_reduction_limit,
+            timer
+        ));
+        presolve
+            .analysis_
+            .setup(&presolve.model, &presolve.options, true);
+        // LP mode (no mipsolver) makes every column continuous; strengthening needs integers
+        presolve.model.integrality_ = vec![HighsVarType::kInteger; 3];
+        presolve.rowsize_integer[0] = 3;
+        let mut stack = HighsPostsolveStack::default();
+        stack.initialize_index_maps(1, 3);
+        let _ = presolve.row_presolve(&mut stack, 0);
+        let pos = presolve.find_nonzero(0, 2);
+        assert!(pos != -1);
+        presolve.a_value[pos as usize]
+    }
+
+    #[test]
+    fn exact_strengthen_coef() {
+        let intended = -(0.784f64 + 5.139);
+        assert_eq!(bigm_strengthened_coef(true), intended);
+        // the 1.16.0 path: the rounded delta cancels to a tighter coefficient
+        let faithful = bigm_strengthened_coef(false);
+        assert!(faithful > intended + 1e-9, "{faithful}");
+    }
+
+    fn bigm_strengthen_objective(exact: bool) -> f64 {
+        let mut highs = Highs::default();
+        assert_eq!(
+            highs.set_option_value_bool("output_flag", false),
+            HighsStatus::kOk
+        );
+        highs.options_.mip_presolve_exact_strengthen = exact;
+        assert_eq!(highs.pass_model(bigm_strengthen_lp()), HighsStatus::kOk);
+        assert_eq!(highs.run(), HighsStatus::kOk);
+        assert_eq!(highs.get_model_status(), HighsModelStatus::kOptimal);
+        highs.get_info().objective_function_value
+    }
+
+    #[test]
+    fn exact_strengthen_keeps_optimum() {
+        assert_eq!(bigm_strengthen_objective(true), -19.0);
+        // HiGHS 1.15.1 and 1.16.0 behaviour with the lever off
+        assert_eq!(bigm_strengthen_objective(false), -9.0);
+    }
+
+    #[test]
+    fn exact_strengthen_recommended_on() {
+        use crate::lp_data::highs_options::RECOMMENDED_MIP_ON;
+        assert!(!HighsOptions::default().mip_presolve_exact_strengthen);
+        assert!(HighsOptions::recommended().mip_presolve_exact_strengthen);
+        assert!(RECOMMENDED_MIP_ON.contains(&"mip_presolve_exact_strengthen"));
+        let mut highs = Highs::default();
+        assert_eq!(
+            highs.set_option_value_bool("mip_presolve_exact_strengthen", true),
+            HighsStatus::kOk
+        );
+        assert_eq!(
+            highs.get_option_value_bool("mip_presolve_exact_strengthen"),
+            Some(true)
+        );
     }
 }

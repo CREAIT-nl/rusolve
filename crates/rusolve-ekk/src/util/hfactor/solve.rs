@@ -99,6 +99,8 @@ pub fn solve_hyper(
     rhs: &mut HVector,
 ) {
     let mut rhs_count = rhs.count;
+    // `work_buffers` sizes `cwork` / `iwork` as C++ `HVectorBase::setup` does.
+    rhs.work_buffers();
     let rhs_index = &mut rhs.index;
     let rhs_array = &mut rhs.array;
 
@@ -119,7 +121,7 @@ pub fn solve_hyper(
     // SAFETY (all `rd!`/`wr!` uses): the C++ reads and writes the same positions unchecked.
     // Every index is a pivot position (< h_start.len() == h_end.len() == h_lookup range),
     // a row index (< h_lookup.len()), or a stack slot (< 2 * h_size + 1 <= iwork.len()); the
-    // marks live in `cwork`, which HVector::setup sizes for all pivot positions. The debug
+    // marks live in `cwork`, which `work_buffers` (above) sizes for all pivot positions. The debug
     // assertions in the macros check this in test builds.
     macro_rules! rd {
         ($s:expr, $i:expr) => {{

@@ -176,3 +176,82 @@ pub(crate) fn post_solve(lp: &HighsLp, status: &str, time: f64, quad: bool) -> V
     }
     out
 }
+
+/// An invalid general constraint (RS4009): the message names the object and what is wrong.
+pub(crate) fn gc_err(msg: impl Into<String>) -> PyErr {
+    let msg = msg.into();
+    Python::attach(|py| {
+        raise(
+            py,
+            "ModelError",
+            Diagnostic::error("RS4009", msg).with_help(
+                "the docstring of the `add_*` method lists what it accepts; `rusolve --explain RS4009` lists the cases",
+            ),
+        )
+    })
+}
+
+/// A call that cannot honour the model's general constraints (RS4010).
+pub(crate) fn gc_unsupported(what: &str, object: &str) -> PyErr {
+    Python::attach(|py| {
+        raise(
+            py,
+            "ModelError",
+            Diagnostic::error(
+                "RS4010",
+                format!(
+                    "{what} does not support a model with general constraints yet (the model has {object})"
+                ),
+            )
+            .with_help("`solve()`, `check()` and `write()` support general constraints"),
+        )
+    })
+}
+
+/// A CP object the solver cannot take, from the diagnostic that
+/// `rusolve_cli::cp_solve::diagnostic` builds (RS4011 invalid, RS4013 the MIP fallback refuses it).
+pub(crate) fn cp_error(e: &rusolve_io::CpError) -> PyErr {
+    let d = rusolve_cli::cp_solve::diagnostic(e);
+    Python::attach(|py| raise(py, "ModelError", d))
+}
+
+/// What `rusolve_cli::cp_solve::solve_with` returned instead of a solution: an object error as
+/// [`cp_error`], an engine error (`mip_engine=cpsat` without the OR-Tools library, RS0012, a bad
+/// `mip_engine`, RS0004, or a point that fails the checker, RS0090) as a `SolveError`.
+pub(crate) fn cp_solve_error(e: &rusolve_cli::cp_solve::CpSolveError) -> PyErr {
+    match e {
+        rusolve_cli::cp_solve::CpSolveError::Cp(e) => cp_error(e),
+        engine => Python::attach(|py| raise(py, "SolveError", engine.diagnostic())),
+    }
+}
+
+/// An invalid CP object found while reading the arguments (RS4011).
+pub(crate) fn cp_err(msg: impl Into<String>) -> PyErr {
+    let msg = msg.into();
+    Python::attach(|py| {
+        raise(
+            py,
+            "ModelError",
+            Diagnostic::error("RS4011", msg).with_help(
+                "the docstring of the `add_*` method lists what it accepts; `rusolve --explain RS4011` lists the cases",
+            ),
+        )
+    })
+}
+
+/// A call that cannot honour the model's CP objects (RS4012).
+pub(crate) fn cp_unsupported(what: &str, object: &str) -> PyErr {
+    Python::attach(|py| {
+        raise(
+            py,
+            "ModelError",
+            Diagnostic::error(
+                "RS4012",
+                format!(
+                    "{what} does not support a model with scheduling or combinatorial objects (the model has {object})"
+                ),
+            )
+            .with_help("`solve()` and `check()` support them"),
+        )
+    })
+}

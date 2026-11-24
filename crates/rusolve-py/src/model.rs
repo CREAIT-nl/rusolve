@@ -26,6 +26,9 @@ use crate::expr::{Constraint, LinExpr, Var, Vars, new_model_id};
 use crate::ingest::{self, Cols, F64s, Flags, IntSlice, Ints, RowKind, build_err};
 use crate::solution::Solution;
 
+mod cp;
+mod gencon;
+
 const INF: f64 = f64::INFINITY;
 
 /// `HighsOptions::recommended()` (the CLI default profile) with the log off.
@@ -427,6 +430,12 @@ pub struct Model {
     row_sources: Vec<(usize, usize, Arc<str>, usize)>,
     /// Counters of the last `solve(callback=...)`, for `callback_stats`.
     callback_stats: Option<Py<PyDict>>,
+    /// The user's general constraints (indicator, SOS, piecewise-linear, abs/min/max/and/or/not;
+    /// `model/gencon.rs`). Semi-continuous columns stay in the solver's integrality.
+    gc: rusolve_io::GcModel,
+    /// The user's scheduling and combinatorial objects (intervals, no-overlap, cumulative,
+    /// all-different, element, table; `model/cp.rs`).
+    cp: rusolve_io::CpModel,
 }
 
 impl Model {
@@ -709,15 +718,34 @@ impl Model {
     }
 
     fn solution(&mut self, run: HighsStatus, time: f64) -> Solution {
-        let port = self.port.as_ref().expect("synced");
+        let port = self.port.take().expect("synced");
+        let sol = self.solution_from(&port, None, None, None, run, time);
+        self.port = Some(port);
+        sol
+    }
+
+    /// The Solution of the solve `port` just finished. With general constraints `port` solved
+    /// the linearization: `user_lp` is the model as the user built it (the counts, names and
+    /// column count of the report) and `gc_report` the checker's `general_constraints` object.
+    fn solution_from(
+        &mut self,
+        port: &Port,
+        user_lp: Option<&rusolve_ekk::prelude::HighsLp>,
+        gc_report: Option<serde_json::Value>,
+        cp_report: Option<(serde_json::Value, &'static str)>,
+        run: HighsStatus,
+        time: f64,
+    ) -> Solution {
         let info = port.get_info();
         let ms = port.get_model_status();
         let sol = port.get_solution();
-        let lp = port.get_lp();
-        let is_mip = lp
-            .integrality_
-            .iter()
-            .any(|t| *t != HighsVarType::kContinuous);
+        let lp = user_lp.unwrap_or_else(|| port.get_lp());
+        let has_gc = gc_report.is_some() || cp_report.is_some();
+        let is_mip = has_gc
+            || lp
+                .integrality_
+                .iter()
+                .any(|t| *t != HighsVarType::kContinuous);
         let status = status_name(run, ms, info.mip_node_count, port.options_.mip_max_nodes);
         let ok = run != HighsStatus::kError
             && sol.value_valid
@@ -755,8 +783,9 @@ impl Model {
             .names
             .get_or_insert_with(|| Arc::new(lp.col_names_.clone()))
             .clone();
-        let mut env = rusolve_cli::api::env_parts(
+        let mut env = rusolve_cli::api::env_parts_for(
             port,
+            lp,
             run,
             time,
             self.name
@@ -767,6 +796,10 @@ impl Model {
         if self.quad.is_some() {
             env.set_convex_qp();
         }
+        let cp_report = cp_report.map(|(report, engine)| {
+            env.set_route("cp", engine);
+            report
+        });
         Solution {
             env: Some(env),
             names,
@@ -793,7 +826,10 @@ impl Model {
                     | HighsModelStatus::kUnbounded
                     | HighsModelStatus::kUnboundedOrInfeasible
             )
-            .then(|| Arc::new(lp.clone())),
+            .then(|| Arc::new(lp.clone()))
+            .filter(|_| !has_gc),
+            gc_report,
+            cp_report,
             quad: self.quad.is_some(),
             cache: [
                 PyOnceLock::new(),
@@ -925,6 +961,17 @@ impl Model {
         self.name
             .clone()
             .unwrap_or_else(|| rusolve_cli::api::DEFAULT_NAME.to_string())
+    }
+
+    /// A quadratic objective and general constraints do not combine yet.
+    fn refuse_gc_quad(&self) -> PyResult<()> {
+        if self.quad.is_some() {
+            return Err(crate::diag::gc_unsupported(
+                "a quadratic objective",
+                &self.gc.first_general().unwrap_or_default(),
+            ));
+        }
+        Ok(())
     }
 
     fn refuse_quad(&self, what: &str) -> PyResult<()> {
@@ -1090,6 +1137,8 @@ impl Model {
             capture_source: false,
             row_sources: Vec::new(),
             callback_stats: None,
+            gc: Default::default(),
+            cp: Default::default(),
         })
     }
 
@@ -1516,6 +1565,29 @@ impl Model {
             })?),
         };
         self.sync()?;
+        if let Some(o) = self.cp.first_object() {
+            if callback.is_some_and(|c| !c.is_none()) {
+                return Err(crate::diag::cp_unsupported("solve(callback=...)", &o));
+            }
+            if self.quad.is_some() {
+                return Err(crate::diag::cp_unsupported("a quadratic objective", &o));
+            }
+            if let Some(g) = self.gc.first_general() {
+                return Err(crate::diag::cp_unsupported(
+                    &format!("solve() with the general constraint {g}, which"),
+                    &o,
+                ));
+            }
+        }
+        if self.gc.has_general() {
+            if callback.is_some_and(|c| !c.is_none()) {
+                return Err(crate::diag::gc_unsupported(
+                    "solve(callback=...)",
+                    &self.gc.first_general().unwrap_or_default(),
+                ));
+            }
+            self.refuse_gc_quad()?;
+        }
         self.sync_quad()?;
         self.apply_options(
             time_limit,
@@ -1535,6 +1607,12 @@ impl Model {
             verbose,
             options,
         );
+        if !self.cp.is_empty() {
+            return self.solve_cp(py);
+        }
+        if self.gc.has_general() {
+            return self.solve_gc(py);
+        }
         let callback = callback.filter(|c| !c.is_none());
         if callback.is_some() {
             self.callback_stats = None;
@@ -1753,6 +1831,256 @@ impl Model {
             )?;
         }
         Ok(())
+    }
+
+    // ------------------------------------------------------------ general constraints
+    //
+    // The objects are kept as the user states them; `solve()` linearizes a copy (big-M from
+    // presolved activity bounds, incremental piecewise-linear, an LP epigraph when the objective
+    // pushes the right way), `check()` evaluates them on the user's objects with binaries
+    // rounded, and `write()` keeps them in the LP or MPS file. Each `add_*` returns the
+    // object's name, which `Solution.to_dict()["general_constraints"]["violations"]` uses.
+
+    /// Indicator constraint: when the binary `var` equals `value` (0 or 1) the `constraint`
+    /// holds, otherwise it is free. `constraint` is an unadded comparison such as `x + y <= 5`
+    /// (one-sided or an equality; use two indicators for a range). `var` must be binary
+    /// (`add_var(binary=True)`). Returns the object's name (`name` or `ind<k>`).
+    ///
+    /// >>> import rusolve as rs
+    /// >>> m = rs.Model(); z = m.add_var(binary=True, cost=3); x = m.add_var(ub=10, cost=1)
+    /// >>> m.add_indicator(z, 0, x >= 5, name="on_off")
+    /// 'on_off'
+    /// >>> m.solve().objective
+    /// 3.0
+    #[pyo3(signature = (var, value, constraint, name=None))]
+    fn add_indicator(
+        &mut self,
+        var: &Bound<'_, PyAny>,
+        value: &Bound<'_, PyAny>,
+        constraint: &Bound<'_, PyAny>,
+        name: Option<String>,
+    ) -> PyResult<String> {
+        self.gc_indicator(var, value, constraint, name)
+    }
+
+    /// Special ordered set of type 1: at most one of `vars` is nonzero. `weights` (distinct,
+    /// default 1, 2, ...) give the order. Members need finite bounds. Returns the name.
+    #[pyo3(signature = (vars, weights=None, name=None))]
+    fn add_sos1(
+        &mut self,
+        vars: &Bound<'_, PyAny>,
+        weights: Option<&Bound<'_, PyAny>>,
+        name: Option<String>,
+    ) -> PyResult<String> {
+        self.gc_sos(rusolve_io::SosKind::Sos1, vars, weights, name)
+    }
+
+    /// Special ordered set of type 2: at most two of `vars` are nonzero, and they are
+    /// adjacent in weight order. Same arguments as `add_sos1`.
+    #[pyo3(signature = (vars, weights=None, name=None))]
+    fn add_sos2(
+        &mut self,
+        vars: &Bound<'_, PyAny>,
+        weights: Option<&Bound<'_, PyAny>>,
+        name: Option<String>,
+    ) -> PyResult<String> {
+        self.gc_sos(rusolve_io::SosKind::Sos2, vars, weights, name)
+    }
+
+    /// Piecewise-linear `y = f(x)` through the points `(xs[i], ys[i])`, `xs` sorted in
+    /// non-decreasing order. `x` is restricted to `[xs[0], xs[-1]]` (no extrapolation).
+    /// Convex and concave shapes the objective pushes the right way become an LP; the others
+    /// use binaries. A repeated x value is a jump: `y` may take either value there. Returns the name.
+    ///
+    /// >>> import rusolve as rs
+    /// >>> m = rs.Model(); x = m.add_var(lb=0, ub=10); y = m.add_var(ub=100, cost=1)
+    /// >>> m.add_pwl(x, y, [0, 4, 10], [0, 4, 16])
+    /// 'pwl0'
+    /// >>> _ = m.add_constr(x >= 6)
+    /// >>> m.solve().objective
+    /// 8.0
+    #[pyo3(signature = (x, y, xs, ys, name=None))]
+    fn add_pwl(
+        &mut self,
+        x: &Bound<'_, PyAny>,
+        y: &Bound<'_, PyAny>,
+        xs: &Bound<'_, PyAny>,
+        ys: &Bound<'_, PyAny>,
+        name: Option<String>,
+    ) -> PyResult<String> {
+        self.gc_pwl(x, y, xs, ys, name)
+    }
+
+    /// `res = abs(arg)`. Returns the name.
+    #[pyo3(signature = (res, arg, name=None))]
+    fn add_abs(
+        &mut self,
+        res: &Bound<'_, PyAny>,
+        arg: &Bound<'_, PyAny>,
+        name: Option<String>,
+    ) -> PyResult<String> {
+        self.gc_func(rusolve_io::FuncKind::Abs, res, arg, None, name)
+    }
+
+    /// `res = max(args..., constant)` (the constant is optional). Returns the name.
+    #[pyo3(signature = (res, args, constant=None, name=None))]
+    fn add_max(
+        &mut self,
+        res: &Bound<'_, PyAny>,
+        args: &Bound<'_, PyAny>,
+        constant: Option<f64>,
+        name: Option<String>,
+    ) -> PyResult<String> {
+        self.gc_func(rusolve_io::FuncKind::Max, res, args, constant, name)
+    }
+
+    /// `res = min(args..., constant)` (the constant is optional). Returns the name.
+    #[pyo3(signature = (res, args, constant=None, name=None))]
+    fn add_min(
+        &mut self,
+        res: &Bound<'_, PyAny>,
+        args: &Bound<'_, PyAny>,
+        constant: Option<f64>,
+        name: Option<String>,
+    ) -> PyResult<String> {
+        self.gc_func(rusolve_io::FuncKind::Min, res, args, constant, name)
+    }
+
+    /// `res = and(args...)` over binary variables (`res` binary too). Returns the name.
+    #[pyo3(signature = (res, args, name=None))]
+    fn add_and(
+        &mut self,
+        res: &Bound<'_, PyAny>,
+        args: &Bound<'_, PyAny>,
+        name: Option<String>,
+    ) -> PyResult<String> {
+        self.gc_func(rusolve_io::FuncKind::And, res, args, None, name)
+    }
+
+    /// `res = or(args...)` over binary variables (`res` binary too). Returns the name.
+    #[pyo3(signature = (res, args, name=None))]
+    fn add_or(
+        &mut self,
+        res: &Bound<'_, PyAny>,
+        args: &Bound<'_, PyAny>,
+        name: Option<String>,
+    ) -> PyResult<String> {
+        self.gc_func(rusolve_io::FuncKind::Or, res, args, None, name)
+    }
+
+    /// `res = 1 - arg` over binary variables. Returns the name.
+    #[pyo3(signature = (res, arg, name=None))]
+    fn add_not(
+        &mut self,
+        res: &Bound<'_, PyAny>,
+        arg: &Bound<'_, PyAny>,
+        name: Option<String>,
+    ) -> PyResult<String> {
+        self.gc_func(rusolve_io::FuncKind::Not, res, arg, None, name)
+    }
+
+    /// An interval of a scheduling model: `start + size = end` while it is present. `start` is
+    /// an integer Var with finite bounds, `size` an int or an integer Var (nonnegative), `end`
+    /// an integer Var, or None to let the model make it (named `<name>_end`, bounds from the
+    /// start and size). `presence` is a binary Var: when it is 0 the interval is absent, takes
+    /// part in no constraint and its columns are free. Returns the `Interval` handle that
+    /// `add_no_overlap` and `add_cumulative` take. The objects are solved by a MIP
+    /// linearization and checked on the objects themselves (docs/design/cp-model.md).
+    ///
+    /// >>> import rusolve as rs
+    /// >>> m = rs.Model(); a = m.add_var(ub=10, integer=True, name="a")
+    /// >>> iv = m.add_interval(a, 3, name="job")
+    /// >>> iv.end.index
+    /// 1
+    #[pyo3(signature = (start, size, end=None, presence=None, name=None))]
+    fn add_interval(
+        &mut self,
+        start: &Bound<'_, PyAny>,
+        size: &Bound<'_, PyAny>,
+        end: Option<&Bound<'_, PyAny>>,
+        presence: Option<&Bound<'_, PyAny>>,
+        name: Option<String>,
+    ) -> PyResult<cp::Interval> {
+        self.cp_interval(start, size, end, presence, name)
+    }
+
+    /// No two present intervals of `intervals` overlap in time (an interval of size 0 overlaps
+    /// nothing). Returns the object's name (`name` or `no_overlap<k>`).
+    #[pyo3(signature = (intervals, name=None))]
+    fn add_no_overlap(
+        &mut self,
+        intervals: &Bound<'_, PyAny>,
+        name: Option<String>,
+    ) -> PyResult<String> {
+        self.cp_no_overlap(intervals, name)
+    }
+
+    /// At every time `t` the demands of the present intervals with `start <= t < end` sum to at
+    /// most `capacity`. `demands`: one int or integer Var per interval (or one value for all);
+    /// `capacity`: an int or an integer Var. Returns the object's name.
+    #[pyo3(signature = (intervals, demands, capacity, name=None))]
+    fn add_cumulative(
+        &mut self,
+        intervals: &Bound<'_, PyAny>,
+        demands: &Bound<'_, PyAny>,
+        capacity: &Bound<'_, PyAny>,
+        name: Option<String>,
+    ) -> PyResult<String> {
+        self.cp_cumulative(intervals, demands, capacity, name)
+    }
+
+    /// The integer variables take pairwise different values. Returns the object's name.
+    #[pyo3(signature = (vars, name=None))]
+    fn add_all_different(
+        &mut self,
+        vars: &Bound<'_, PyAny>,
+        name: Option<String>,
+    ) -> PyResult<String> {
+        self.cp_all_different(vars, name)
+    }
+
+    /// `target = values[index]`, with `index` 0-based. `index` and `target` are integer Vars;
+    /// `values` are ints or integer Vars. Returns the object's name.
+    #[pyo3(signature = (index, values, target, name=None))]
+    fn add_element(
+        &mut self,
+        index: &Bound<'_, PyAny>,
+        values: &Bound<'_, PyAny>,
+        target: &Bound<'_, PyAny>,
+        name: Option<String>,
+    ) -> PyResult<String> {
+        self.cp_element(index, values, target, name)
+    }
+
+    /// The tuple of values of `vars` is one of the rows of `tuples` (or none of them with
+    /// `negated=True`). Returns the object's name.
+    #[pyo3(signature = (vars, tuples, negated=false, name=None))]
+    fn add_table(
+        &mut self,
+        vars: &Bound<'_, PyAny>,
+        tuples: &Bound<'_, PyAny>,
+        negated: bool,
+        name: Option<String>,
+    ) -> PyResult<String> {
+        self.cp_table(vars, tuples, negated, name)
+    }
+
+    /// The number of scheduling and combinatorial objects added (intervals, no-overlap,
+    /// cumulative, all-different, element, table).
+    #[getter]
+    fn num_cp_objects(&self) -> usize {
+        self.cp.counts().iter().map(|(_, c)| c).sum()
+    }
+
+    /// The number of general constraints added (indicator, SOS, piecewise-linear, functions).
+    #[getter]
+    fn num_general_constraints(&self) -> usize {
+        self.gc
+            .counts()
+            .iter()
+            .filter(|(k, _)| *k != "semi_continuous")
+            .map(|(_, c)| c)
+            .sum()
     }
 
     /// Make variables semi-continuous (`integer=False`: the value is 0 or within its bounds)
@@ -1991,8 +2319,19 @@ impl Model {
         let values = self.assignment(solution)?;
         let name = self.display_name();
         let lp = &self.port.as_ref().expect("synced").model_lp_;
-        let v = rusolve_cli::api::check(lp, &values, tol, mip_tol, max_findings, &name)
-            .map_err(crate::diag::model_err)?;
+        let gc = self.gc.has_general().then(|| self.gc_with_semi(lp));
+        let cp = (!self.cp.is_empty()).then_some(&self.cp);
+        let v = rusolve_cli::api::check(
+            lp,
+            gc.as_ref(),
+            cp,
+            &values,
+            tol,
+            mip_tol,
+            max_findings,
+            &name,
+        )
+        .map_err(crate::diag::model_err)?;
         json_to_py(py, &v)
     }
 
@@ -2010,6 +2349,8 @@ impl Model {
         // The port's LP has no Hessian, so every verdict would ignore the quadratic term:
         // refuse before spending a solve on it.
         self.refuse_quad("explain")?;
+        self.refuse_gc("explain()")?;
+        self.refuse_cp("explain()")?;
         self.sync()?;
         let name = self.display_name();
         let lp = &self.port.as_ref().expect("synced").model_lp_;
@@ -2049,6 +2390,8 @@ impl Model {
     ) -> PyResult<Py<PyAny>> {
         if with_solve {
             self.refuse_quad("lint(with_solve=True)")?;
+            self.refuse_gc("lint(with_solve=True)")?;
+            self.refuse_cp("lint(with_solve=True)")?;
         }
         self.sync()?;
         let name = self.display_name();
@@ -2084,6 +2427,8 @@ impl Model {
     #[pyo3(signature = (time_limit=30.0))]
     fn diagnose(&mut self, py: Python<'_>, time_limit: f64) -> PyResult<Py<PyAny>> {
         self.refuse_quad("diagnose")?;
+        self.refuse_gc("diagnose()")?;
+        self.refuse_cp("diagnose()")?;
         self.sync()?;
         let name = self.display_name();
         let lp = &self.port.as_ref().expect("synced").model_lp_;
@@ -2111,6 +2456,8 @@ impl Model {
         cols: Option<Vec<String>>,
     ) -> PyResult<Py<PyAny>> {
         self.refuse_quad("ranging")?;
+        self.refuse_gc("ranging()")?;
+        self.refuse_cp("ranging()")?;
         self.sync()?;
         let name = self.display_name();
         let (rows, cols) = (rows.unwrap_or_default(), cols.unwrap_or_default());
@@ -2146,6 +2493,8 @@ impl Model {
     ) -> PyResult<Py<PyAny>> {
         // verify() and objective_original use the port's HighsLp, which has no Hessian.
         self.refuse_quad("feasrelax")?;
+        self.refuse_gc("feasrelax()")?;
+        self.refuse_cp("feasrelax()")?;
         if let Some(m) = &mode
             && m != "weighted"
             && m != "min-count"
@@ -2197,10 +2546,13 @@ impl Model {
     /// >>> m.write(path); os.path.getsize(path) > 0
     /// True
     fn write(&mut self, path: &str) -> PyResult<()> {
+        // no MPS or LP syntax carries these objects
+        self.refuse_cp("write()")?;
         self.sync()?;
         let lp = &self.port.as_ref().expect("synced").model_lp_;
         let hessian = self.quad.as_deref().unwrap_or(&[]);
-        rusolve_cli::api::write_model(lp, hessian, path).map_err(crate::diag::model_err)
+        let gc = self.gc.has_general().then_some(&self.gc);
+        rusolve_cli::api::write_model(lp, gc, hessian, path).map_err(crate::diag::model_err)
     }
 
     /// The Var of column `j`.
@@ -2317,6 +2669,7 @@ pub(crate) fn read_matrix(a: &Bound<'_, PyAny>) -> PyResult<Matrix> {
 
 pub fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<Model>()?;
+    m.add_class::<cp::Interval>()?;
     m.add_class::<crate::callback::CallbackContext>()?;
     Ok(())
 }

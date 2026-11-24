@@ -387,13 +387,15 @@ impl HEkk {
             self.analysis_.simplex_timer_start(DseIzClock, 0);
         }
         let num_row = self.lp_.num_row_;
-        let mut row_ep = HVector::default();
+        // PORT NOTE (perf): recycled storage, same values as a fresh vector (HVectorPool).
+        let mut row_ep = self.hvector_pool_.take();
         row_ep.setup(num_row);
         debug_assert!(self.dual_edge_weight_.len() as HighsInt >= num_row);
         for i_row in 0..num_row {
             self.dual_edge_weight_[i_row as usize] =
                 self.compute_dual_steepest_edge_weight(i_row, &mut row_ep);
         }
+        self.hvector_pool_.give(row_ep);
         if self.analysis_.analyse_simplex_time {
             self.analysis_.simplex_timer_stop(SimplexIzDseWtClock, 0);
             self.analysis_.simplex_timer_stop(DseIzClock, 0);

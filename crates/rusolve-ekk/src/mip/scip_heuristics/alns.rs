@@ -960,7 +960,7 @@ mod tests {
         lp_iters: i64,
         calls: i64,
         found: i64,
-        by_source: [i64; 27],
+        by_source: [i64; 28],
         incumbent: Vec<f64>,
         alns_state: bool,
         s6_state: bool,

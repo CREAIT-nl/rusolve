@@ -1,5 +1,5 @@
 ;; Example component (ABI v1, see ../src/lib.rs): node selection depth-first, ties by the
-;; lowest lower bound (a dive-first rule commercial solvers mix into best-bound). Records at
+;; lowest lower bound (a dive-first rule many MIP solvers mix into best-bound). Records at
 ;; in_ptr are four f64 each: lower_bound, estimate, depth, num_domain_changes. Hand-written WAT
 ;; because the wasm32-unknown-unknown target is not installed; a Rust `#![no_std]` cdylib
 ;; exporting the same function is equivalent.

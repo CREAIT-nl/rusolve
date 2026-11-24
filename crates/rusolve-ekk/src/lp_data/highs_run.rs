@@ -868,9 +868,12 @@ impl Highs {
             // semi-variables it only counts and may warn "No semi-integer/integer
             // variables ...".
             let mut made_semi_variable_mods = false;
-            let options = self.options_.clone();
-            let call_status =
-                assess_semi_variables(&mut self.model_lp_, &options, &mut made_semi_variable_mods);
+            // PORT NOTE (perf): disjoint field borrows; no options copy per call.
+            let call_status = assess_semi_variables(
+                &mut self.model_lp_,
+                &self.options_,
+                &mut made_semi_variable_mods,
+            );
             undo_mods = undo_mods || made_semi_variable_mods;
             if call_status == HighsStatus::kError {
                 self.set_highs_model_status_and_clear_solution_and_basis(

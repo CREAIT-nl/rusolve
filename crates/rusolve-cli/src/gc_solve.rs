@@ -63,12 +63,13 @@ pub fn prepare(lp: &mut HighsLp, gc: GcModel, bigm_max: f64) -> Result<GcPlan, G
             ..LinOptions::default()
         },
     )?;
-    extend_lp(lp, &ext);
+    extend_lp(lp, &ext, "gc_");
     Ok(GcPlan { user_lp, gc, ext })
 }
 
-/// Appends the extension's columns and rows to `lp` (column-wise matrix).
-fn extend_lp(lp: &mut HighsLp, ext: &Extension) {
+/// Appends the extension's columns and rows to `lp` (column-wise matrix), naming them `prefix`
+/// plus the extension's own name (`gc_` here, `cp_` for the CP layer).
+pub(crate) fn extend_lp(lp: &mut HighsLp, ext: &Extension, prefix: &str) {
     let n = lp.num_col_ as usize;
     let m = lp.num_row_ as usize;
     for &(j, lo, hi) in &ext.bound_changes {
@@ -130,14 +131,14 @@ fn extend_lp(lp: &mut HighsLp, ext: &Extension) {
             });
         }
         if had_names {
-            lp.col_names_.push(format!("gc_{}", c.name));
+            lp.col_names_.push(format!("{prefix}{}", c.name));
         }
     }
     for r in &ext.rows {
         lp.row_lower_.push(r.lower);
         lp.row_upper_.push(r.upper);
         if had_rows {
-            lp.row_names_.push(format!("gc_{}", r.name));
+            lp.row_names_.push(format!("{prefix}{}", r.name));
         }
     }
 }

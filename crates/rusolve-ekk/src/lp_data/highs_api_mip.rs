@@ -604,6 +604,7 @@ impl Highs {
             "mip_heuristic_run_fpr" => self.options_.mip_heuristic_run_fpr = value,
             "mip_heuristic_run_local_mip" => self.options_.mip_heuristic_run_local_mip = value,
             "mip_strengthen_cover_guard" => self.options_.mip_strengthen_cover_guard = value,
+            "mip_presolve_exact_strengthen" => self.options_.mip_presolve_exact_strengthen = value,
             "mip_ls_gub_swap" => self.options_.mip_ls_gub_swap = value,
             "mip_ls_int_lp_repair" => self.options_.mip_ls_int_lp_repair = value,
             "mip_alns" => self.options_.mip_alns = value,
@@ -922,6 +923,7 @@ impl Highs {
             "presolve" => self.options_.presolve = value_trim,
             "run_crossover" => self.options_.run_crossover = value_trim,
             "solver" => self.options_.solver = value_trim,
+            "mip_engine" => self.options_.mip_engine = value_trim,
             "icrash_strategy" => self.options_.icrash_strategy = value_trim,
             "mip_improving_solution_file" => self.options_.mip_improving_solution_file = value_trim,
             "mip_debug_solution_file" => self.options_.mip_debug_solution_file = value_trim,
@@ -1162,6 +1164,7 @@ impl Highs {
             "mip_heuristic_run_fpr" => Some(self.options_.mip_heuristic_run_fpr),
             "mip_heuristic_run_local_mip" => Some(self.options_.mip_heuristic_run_local_mip),
             "mip_strengthen_cover_guard" => Some(self.options_.mip_strengthen_cover_guard),
+            "mip_presolve_exact_strengthen" => Some(self.options_.mip_presolve_exact_strengthen),
             "mip_ls_gub_swap" => Some(self.options_.mip_ls_gub_swap),
             "mip_ls_int_lp_repair" => Some(self.options_.mip_ls_int_lp_repair),
             "mip_alns" => Some(self.options_.mip_alns),
@@ -1299,6 +1302,7 @@ impl Highs {
             "presolve" => Some(self.options_.presolve.clone()),
             "run_crossover" => Some(self.options_.run_crossover.clone()),
             "solver" => Some(self.options_.solver.clone()),
+            "mip_engine" => Some(self.options_.mip_engine.clone()),
             "icrash_strategy" => Some(self.options_.icrash_strategy.clone()),
             "mip_improving_solution_file" => {
                 Some(self.options_.mip_improving_solution_file.clone())

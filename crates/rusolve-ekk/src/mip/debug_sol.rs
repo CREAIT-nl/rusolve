@@ -102,7 +102,7 @@ impl HighsDebugSol {
 
     /// True when the domain's current bounds contain the debug solution (the C++
     /// `conflictingBounds[&domain].empty()`, see the module doc).
-    fn domain_contains(&self, domain: &HighsDomain) -> bool {
+    pub(crate) fn domain_contains(&self, domain: &HighsDomain) -> bool {
         let n = self.debug_solution.len();
         if domain.col_lower_.len() != n {
             return false;

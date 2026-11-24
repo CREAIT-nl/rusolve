@@ -6,11 +6,26 @@ Use the MCP server when you can, the CLI otherwise. Both return the same JSON. N
 
 ## Start here
 
+- Install: [INSTALL.md](INSTALL.md) is written for an agent: it picks the route, installs the binary, registers the MCP server and the skills, and verifies it, without questions beyond the optional CP-SAT engine.
+- Install: `curl -fsSL https://raw.githubusercontent.com/CREAIT-nl/rusolve/main/install.sh | sh` puts `rusolve-cli` in `~/.local/bin` (Linux, macOS); add `--with-cpsat` for the optional CP-SAT engine; `pip install rusolve` remains the Python route. See [docs/design/install.md](docs/design/install.md).
 - [Install](README.md#install): `uvx --from rusolve rusolve mcp` runs the MCP server from the Python wheel (which also provides the `rusolve` CLI); `cargo install --git <repo> rusolve-cli --locked` for the CLI alone.
 - [README, agent section](README.md#for-agents): build, MCP config, the five-minute path.
 - [Generated reference](docs/agent/reference.md): every command, MCP tool, option (with range and default) and environment variable. Generated from the binary by `tools/gen_agent_docs.py`; never stale.
 - [MCP server design](docs/design/mcp.md): tools, model handles, protocol notes.
 - [Python package](crates/rusolve-py/README.md): `import rusolve as rs; m = rs.Model()`, models from dicts, numpy, scipy.sparse or expressions; `rusolve.scipy.milp`/`linprog` for SciPy code. Spec: [python-api.md](docs/design/python-api.md).
+- [Python general constraints](crates/rusolve-py/README.md#general-constraints): `m.add_indicator`, `add_sos1`/`add_sos2`, `add_pwl`, `add_abs`, `add_max`, `add_min`, `add_and`, `add_or`, `add_not` (no big-M by hand; `sol.general_constraints["verified"]`). A quadratic objective is `m.set_quadratic_objective`; quadratic constraints and cones are not in the Python API.
+- [Scheduling objects](docs/design/cp-model.md): `m.add_interval`, `add_no_overlap`, `add_cumulative`, `add_all_different`, `add_element`, `add_table` (Python and MCP `build_model` `cp` section; solved by MIP linearization, or by OR-Tools CP-SAT with `mip_engine=cpsat` when installed (`rusolve-cli version --format json` shows `cpsat.available`); checked on the objects, `sol.cp["verified"]`; no MPS/LP syntax).
+
+## Problem classes beyond LP and MIP
+
+`rusolve-cli mip model --format json` (and `solve`) routes by class; the envelope has `class` and `engine`. A class nothing solves exits 3 with a typed error that names the class.
+
+- **Convex QP** (`convex_qp`, engine `hipo` or `quass`): quadratic objective `c'x + 1/2 x'Qx`, linear rows, continuous. [Playbook](docs/skills/convex-qp/SKILL.md).
+- **SOCP, rotated cones, convex QCQP** (`conic`, engine `clarabel`): quadratic rows (`[ x ^ 2 + y ^ 2 ] <= 1` in an LP file) and cones (`CSECTION ... QUAD|RQUAD` in MPS), continuous. Answers carry a checker verdict, row and cone duals, and verified infeasibility or unboundedness certificates. [Playbook](docs/skills/conic/SKILL.md).
+- **Convex MIQP** (`miqp`, engine `oa`): a convex Q with integer columns. Experimental, off by default because it is slower; enable with `--opt miqp_oa=true` (MCP `solve` option `miqp_oa`). [Design](docs/design/miqp-oa.md), [playbook](docs/skills/convex-qp/SKILL.md).
+- **Mixed-integer SOCP and convex MIQCQP** (`mi_conic`, engine `oa`): cones or convex quadratic rows with integer columns. Experimental, off by default because it is slower; enable with `--opt misocp_oa=true` (MCP `solve` option `misocp_oa`). [Design](docs/design/misocp-oa.md), [playbook](docs/skills/conic/SKILL.md).
+- **General constraints** (`gc`, `gc_mip`, engine `gc-linearization`): indicator, SOS, piecewise-linear, min/max/abs, and/or/not, semi-continuous. [Playbook](docs/skills/piecewise-semi/SKILL.md).
+- Refused with a typed error: `nonconvex_qp`, `nonconvex_qcqp`, a nonconvex Q with integers, general constraints together with quadratic terms (`gc_quadratic`).
 
 ## Skills (task recipes for an agent)
 
@@ -27,6 +42,7 @@ Use the MCP server when you can, the CLI otherwise. Both return the same JSON. N
 - [Routing: TSP and VRP](docs/skills/routing/SKILL.md)
 - [Piecewise-linear and semi-continuous](docs/skills/piecewise-semi/SKILL.md)
 - [Convex QP and portfolios](docs/skills/convex-qp/SKILL.md)
+- [Conic: SOCP, rotated cones, convex QCQP, mixed-integer lever](docs/skills/conic/SKILL.md)
 - Claude Code plugin: `.claude-plugin/plugin.json` packages `docs/skills/` (`claude plugin validate . --strict`).
 
 ## Contracts

@@ -10,7 +10,7 @@ faithful port of HiGHS, improved with techniques from published papers and other
 licensed solvers. Everything is also exposed to agents: JSON output, coded diagnostics, an MCP
 server.
 
-If you only want to *use* rusolve to solve a model, read [`llms.txt`](llms.txt) and
+If you only want to *use* rusolve to solve a model, install it with [`INSTALL.md`](INSTALL.md), then read [`llms.txt`](llms.txt) and
 [`docs/skills/start-here`](docs/skills/start-here/SKILL.md) instead.
 
 ## Before you change anything

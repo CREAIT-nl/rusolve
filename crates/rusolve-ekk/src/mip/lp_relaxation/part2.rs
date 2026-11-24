@@ -352,8 +352,19 @@ impl HighsLpRelaxation {
     /// C++: `void recoverBasis()`
     pub fn recover_basis(&mut self) {
         if let Some(basis) = self.basischeckpoint.clone() {
-            self.lpsolver
+            let status = self
+                .lpsolver
                 .set_basis(&basis, "HighsLpRelaxation::recoverBasis");
+            // rusolve lever `mip_lp_keep_dse_weights` = 2 (not in HiGHS): the weights stored
+            // with the basis replace the ones kept from the last solve (simplex/ekk/dse_keep.rs).
+            if let Some(weight) = &basis.dse_weight {
+                if status == HighsStatus::kOk && self.lpsolver.options_.mip_lp_keep_dse_weights == 2
+                {
+                    self.lpsolver
+                        .ekk_instance_
+                        .dse_keep_set(weight, basis.col_status.len());
+                }
+            }
             self.currentbasisstored = true;
         }
     }

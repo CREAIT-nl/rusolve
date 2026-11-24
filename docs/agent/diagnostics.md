@@ -35,6 +35,11 @@ Every error and warning has a stable code. `rusolve --explain RSnnnn` prints an 
 | [RS4006](#rs4006) | error | the solve stopped without an optimal solution (Python) |
 | [RS4007](#rs4007) | error | no primal solution to read (Python) |
 | [RS4008](#rs4008) | error | a Python callback hook raised an exception |
+| [RS4009](#rs4009) | error | invalid general constraint in a Python call |
+| [RS4010](#rs4010) | error | a Python call does not support the model's general constraints |
+| [RS4011](#rs4011) | error | invalid scheduling or combinatorial (CP) object |
+| [RS4012](#rs4012) | error | a call does not support the model's CP objects |
+| [RS4013](#rs4013) | error | the MIP linearization cannot take a CP object |
 
 ### RS0001
 
@@ -88,7 +93,7 @@ The file was read but its content is not a valid model in its format. The messag
 
 **model is not supported by this command** (error)
 
-The model parses but belongs to a class the command cannot solve (nonconvex or mixed-integer quadratic, mixed-integer conic, general constraints with quadratic terms, or a Hessian given to `mip`). `rusolve classify <model>` names the class and the engine that would take it.
+The model parses but belongs to a class the command cannot solve (nonconvex or mixed-integer quadratic, mixed-integer conic, general constraints with quadratic terms, or a Hessian given to `mip`), or the model is outside what the selected engine takes (`mip_engine=cpsat` needs every column integer with finite bounds and integral rows, and an OR-Tools library that can be loaded at run time: `rusolve version --format json` shows `cpsat.available` and the places searched; install it with `install.sh --with-cpsat` or `pip install 'rusolve[cpsat]'`, or point `RUSOLVE_ORTOOLS_LIB` at the file). `rusolve classify <model>` names the class and the engine that would take it.
 
 ### RS0090
 
@@ -209,3 +214,33 @@ A value was read from a `Solution` that has no primal vector, for example `sol[v
 **a Python callback hook raised an exception** (error)
 
 A hook of the object passed as `Model.solve(callback=...)` (on_progress, on_improving_solution, on_cut_pool, user_solution, separate, branching_score, select_node, lazy_constraints) raised, or returned a value of the wrong type or length. The solver never sees the exception: the first one is kept, no later hook is called (each falls back to the solver's own rule), the solve is interrupted at its next limit check and `Model.solve` raises `rusolve.CallbackError` whose `__cause__` is the original exception and whose `.solution` is the partial result. `Model.callback_stats` counts calls and errors per hook. Fix the hook: it must return what its docstring names (a list of cuts, one score per candidate, an index into `ctx.open_nodes`, a full-length solution or None).
+
+### RS4009
+
+**invalid general constraint in a Python call** (error)
+
+A `Model.add_indicator`, `add_sos1`, `add_sos2`, `add_pwl`, `add_abs`, `add_min`, `add_max`, `add_and`, `add_or` or `add_not` call got an object the solver cannot take: an indicator variable that is not binary (it needs integer bounds within [0, 1]), an indicator row that is a range, breakpoints that are fewer than two, of different lengths or not sorted by x, SOS weights of the wrong length, an operand count the function does not allow, a variable that does not exist, or a non-binary variable in `add_and`, `add_or` or `add_not`. Python raises `rusolve.ModelError` (also a `ValueError`) naming the object; the model is unchanged when a call raises. A later `set_bounds` or `set_integer` can make an object invalid: `Model.solve` then raises the same code before solving.
+
+### RS4010
+
+**a Python call does not support the model's general constraints** (error)
+
+The model has indicator, SOS, piecewise-linear, abs/min/max or and/or/not objects, and the call (`explain`, `iis`, `ranging`, `feasrelax`, `diagnose`, `lint(with_solve=True)`, a `solve` callback or a quadratic objective) would work on the plain rows and silently ignore them, which gives a wrong answer. Python raises `rusolve.ModelError` instead. `solve`, `check` and `write` support these objects: `check` evaluates them on your objects with binaries rounded, and `write` keeps them in the LP or MPS file. To diagnose infeasibility, replace the objects by their big-M rows with the same model written by hand, or relax them one at a time.
+
+### RS4011
+
+**invalid scheduling or combinatorial (CP) object** (error)
+
+A `Model.add_interval`, `add_no_overlap`, `add_cumulative`, `add_all_different`, `add_element` or `add_table` call (or an entry of the `cp` section of the MCP `build_model` tool) got an object the solver cannot take. The message names the object and what is wrong: a variable that does not exist, is not integer or has an infinite bound (every variable of a CP object is an integer with finite bounds), a presence variable that is not binary, a negative size, demand or capacity (or a variable that can be negative), an interval index that is out of range or listed twice, demands that do not match the intervals, a table tuple of the wrong length, an element with no values. Python raises `rusolve.ModelError` (also a `ValueError`); `build_model` returns an error naming the JSON path, for example `cp.no_overlap[0].intervals[2]`. The model is unchanged when a call raises. A later `set_bounds` or `set_integer` can make an object invalid: `Model.solve` then raises the same code before solving. No MPS or LP file carries these objects.
+
+### RS4012
+
+**a call does not support the model's CP objects** (error)
+
+The model has scheduling or combinatorial objects (interval, no-overlap, cumulative, all-different, element, table), and the call (`explain`, `iis`, `ranging`, `feasrelax`, `diagnose`, `lint(with_solve=True)`, a `solve` callback, a quadratic objective, or the MCP tools `modify`, `explain`, `lint`, `ranging`, `feasrelax` on such a model) would work on the plain rows and silently ignore them, which gives a wrong answer. Python raises `rusolve.ModelError`; the MCP tool returns an error. `solve` and `check` support these objects: `check` evaluates them on your objects. To diagnose infeasibility, relax or remove the objects one at a time.
+
+### RS4013
+
+**the MIP linearization cannot take a CP object** (error)
+
+The object is valid, but the engine-free fallback (the MIP linearization of the CP layer) refuses it, and no other engine is available. The message names the object and the limit: a cumulative whose horizon (from the start and end bounds) exceeds the time-indexed limit (1000 time points) or whose sizes or demands are variables, a no-overlap interval whose size variable can be 0, a derived big-M above 1e6, or a domain too large to enumerate (more than 100000 value, tuple or start-time binaries). Tighten the variable bounds, make sizes and demands constants, or use the CP-SAT engine, which takes these models without a limit when it is installed. Python raises `rusolve.ModelError`; the MCP `solve` tool returns an error.

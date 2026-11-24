@@ -2,5 +2,5 @@
   "id": "class_facility",
   "title": "Facility location",
   "kind": "class-facility",
-  "prompt": "The file {dir}/model.lp chooses which facilities to open and which customers each serves. Solve it with rusolve and report the status, the objective, the names of the open_* columns equal to 1, and the playbook skill that fits (one of: rusolve-assignment-transport-flow, rusolve-set-cover-packing, rusolve-scheduling, rusolve-lot-sizing, rusolve-facility-location, rusolve-routing, rusolve-piecewise-semi, rusolve-convex-qp).\n\nEnd your final message with one line of the form\nANSWER: {\"status\": \"<status>\", \"objective\": <number>, \"open\": [\"<column name>\", ...], \"playbook\": \"<skill name>\"}"
+  "prompt": "The file {dir}/model.lp chooses which facilities to open and which customers each serves. Solve it with rusolve and report the status, the objective, the names of the open_* columns equal to 1, and the playbook skill that fits (one of: rusolve-assignment-transport-flow, rusolve-set-cover-packing, rusolve-scheduling, rusolve-lot-sizing, rusolve-facility-location, rusolve-routing, rusolve-piecewise-semi, rusolve-convex-qp, rusolve-conic).\n\nEnd your final message with one line of the form\nANSWER: {\"status\": \"<status>\", \"objective\": <number>, \"open\": [\"<column name>\", ...], \"playbook\": \"<skill name>\"}"
 }

@@ -182,13 +182,14 @@ const INVALID_PARAMS: i64 = -32602;
 /// `UnsupportedProtocolVersionError` (versioning page).
 const UNSUPPORTED_VERSION: i64 = -32022;
 
-const INSTRUCTIONS: &str = "rusolve solves LPs and MIPs (a faithful HiGHS port), convex QPs, SOCPs and \
-general-constraint models. Call load_model first (path, or mps_text / lp_text / mof_text), or build_model \
+const INSTRUCTIONS: &str = "rusolve solves LPs and MIPs (a faithful HiGHS port), convex QPs, SOCPs and convex QCQPs, \
+and general-constraint models; a convex MIQP and a mixed-integer conic model load too, and solve runs their experimental \
+engine only with the option miqp_oa or misocp_oa set to true (off by default, slower). Call load_model first (path, or mps_text / lp_text / mof_text), or build_model \
 with JSON variables and rows; it returns a model_id that every other tool takes. solve returns a rusolve.result/1 \
 envelope. After modify (edits by row/column name) an LP re-solves from the kept basis, so batteries of \
 what-if solves are cheap. explain gives an infeasibility or unboundedness certificate by name, feasrelax \
 the cheapest bound relaxation, lint static modelling problems, ranging sensitivity. free_model releases a handle. \
-The prompts are workflows (solve, debug-infeasible, tune, extend); the resources are the JSON schemas and the \
+The prompts are workflows and problem-class playbooks (solve, debug-infeasible, tune, extend, conic, convex-qp, ...); the resources are the JSON schemas and the \
 agent reference.";
 
 fn capabilities() -> Value {

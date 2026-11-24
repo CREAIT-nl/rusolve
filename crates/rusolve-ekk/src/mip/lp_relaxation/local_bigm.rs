@@ -14,6 +14,8 @@
 //! relaxation, so the node LP bound rises. The rows are valid only below the node, so the
 //! modification is undone before the next node is evaluated, and every consumer that turns the
 //! LP matrix into globally valid information (dual proofs, cuts) is gated off while modified.
+//! A restart builds the new model from the LP relaxation, so `performRestart` undoes the
+//! modification first; otherwise the last node's rows become global and cut off solutions.
 
 use crate::prelude::*;
 
@@ -102,6 +104,47 @@ impl HighsLpRelaxation {
         self.nlocal_rows = n;
         self.status = HighsLpRelaxation_Status::kNotSet;
         self.currentbasisstored = false;
+    }
+
+    /// Debug solution: every tightened row must keep a debug solution that lies in `dom`.
+    fn debug_check_mods(
+        ms: &HighsMipSolver,
+        dom: &HighsDomain,
+        mods: &[HighsLpRelaxation_LocalMod],
+    ) {
+        let dbg = &ms.mipdata_.debug_solution;
+        if !dbg.debug_sol_active || mods.is_empty() || !dbg.domain_contains(dom) {
+            return;
+        }
+        let mut i = 0;
+        while i < mods.len() {
+            let r = mods[i].row;
+            let mut j = i;
+            while j < mods.len() && mods[j].row == r {
+                j += 1;
+            }
+            let s = ms.mipdata_.a_rstart_[r as usize] as usize;
+            let e = ms.mipdata_.a_rstart_[r as usize + 1] as usize;
+            let mut index = Vec::with_capacity(e - s);
+            let mut value = Vec::with_capacity(e - s);
+            for k in s..e {
+                let col = ms.mipdata_.a_rindex_[k];
+                let mut v = ms.mipdata_.a_rvalue_[k];
+                if let Some(m) = mods[i..j].iter().find(|m| m.col == col) {
+                    v = m.new_coef;
+                }
+                index.push(col);
+                value.push(v);
+            }
+            dbg.check_row(
+                &index,
+                &value,
+                index.len() as HighsInt,
+                mods[j - 1].new_lower,
+                mods[j - 1].new_upper,
+            );
+            i = j;
+        }
     }
 
     pub(crate) fn undo_mods(lpsolver: &mut Highs, mods: &[HighsLpRelaxation_LocalMod]) {
@@ -214,6 +257,7 @@ impl HighsLpRelaxation {
                 });
             }
         }
+        Self::debug_check_mods(ms, dom, &desired);
         if desired == self.local_mods {
             return desired.len();
         }
@@ -242,5 +286,93 @@ impl HighsLpRelaxation {
         let n = desired.len();
         self.local_mods = desired;
         n
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::lp_data::highs_callback::HighsCallback;
+    use crate::parallel::highs_task_executor::HighsTaskExecutor;
+
+    /// min -x + 3 z  s.t.  x - 100 z <= 5,  x in [0, 10],  z binary. Optimum -7 at (10, 1).
+    fn bigm_lp() -> HighsLp {
+        let mut lp = HighsLp::default();
+        lp.num_col_ = 2;
+        lp.num_row_ = 1;
+        lp.col_cost_ = vec![-1.0, 3.0];
+        lp.col_lower_ = vec![0.0, 0.0];
+        lp.col_upper_ = vec![10.0, 1.0];
+        lp.row_lower_ = vec![-kHighsInf];
+        lp.row_upper_ = vec![5.0];
+        lp.integrality_ = vec![HighsVarType::kContinuous, HighsVarType::kInteger];
+        lp.a_matrix_.format_ = MatrixFormat::kColwise;
+        lp.a_matrix_.num_col_ = 2;
+        lp.a_matrix_.num_row_ = 1;
+        lp.a_matrix_.start_ = vec![0, 1, 2];
+        lp.a_matrix_.index_ = vec![0, 0];
+        lp.a_matrix_.value_ = vec![1.0, -100.0];
+        lp
+    }
+
+    /// A restart rebuilds the model from the LP relaxation. A node-local big-M row still in
+    /// the LP (here `x - z <= 5`, valid only below a node with x <= 6) must not reach the new
+    /// model: it cuts off the optimum (10, 1), and the restarted solve then ends Optimal at -5.
+    #[test]
+    fn restart_drops_node_local_bigm_rows() {
+        let (status, obj, coefs) = std::thread::spawn(|| {
+            crate::parallel::highs_parallel::initialize_scheduler(1);
+            let lp = bigm_lp();
+            let mut options = HighsOptions::default();
+            options.output_flag = false;
+            options.presolve = kHighsOffString.to_string();
+            options.mip_node_bigm = true;
+            let solution = HighsSolution::default();
+            let mut callback = HighsCallback::default();
+            let mut ms = HighsMipSolver::new(&mut callback, &options, &lp, &solution, false, 0);
+            ms.run();
+            assert!((ms.solution_objective_ + 7.0).abs() < 1e-6);
+
+            // The global bounds of the model, and a node below x <= 6.
+            let mut global = ms.mipdata_.domains[0].clone();
+            global.col_lower_ = vec![0.0, 0.0];
+            global.col_upper_ = vec![10.0, 1.0];
+            let mut node = global.clone();
+            node.col_upper_[0] = 6.0;
+            let mut relax = ms.mipdata_.lps[0].take();
+            relax.restore_local_mods();
+            relax.reset_to_global_domain(&ms, &global);
+            assert_eq!(relax.apply_local_bigm(&ms, &node), 1);
+            assert_eq!(relax.local_mods[0].new_coef, -1.0);
+            ms.mipdata_.lps[0].put(relax);
+
+            // Forget the solve, then restart from the LP relaxation as the tree search does.
+            ms.modelstatus_ = HighsModelStatus::kNotset;
+            ms.solution_objective_ = kHighsInf;
+            ms.solution_.clear();
+            ms.mipdata_.upper_bound = kHighsInf;
+            ms.mipdata_.upper_limit = kHighsInf;
+            ms.mipdata_.optimality_limit = kHighsInf;
+            ms.mipdata_.incumbent.clear();
+            ms.perform_restart();
+            let out = (
+                ms.modelstatus_,
+                ms.solution_objective_,
+                mip_model!(ms).a_matrix_.value_.clone(),
+            );
+            drop(ms);
+            HighsTaskExecutor::shutdown(true);
+            out
+        })
+        .join()
+        .unwrap();
+        assert!(
+            !coefs.contains(&-1.0),
+            "node-local row in the restarted model: {coefs:?}"
+        );
+        if status != HighsModelStatus::kNotset {
+            assert_eq!(status, HighsModelStatus::kOptimal);
+            assert!((obj + 7.0).abs() < 1e-6, "restarted objective {obj}");
+        }
     }
 }

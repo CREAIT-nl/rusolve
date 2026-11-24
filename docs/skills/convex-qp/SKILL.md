@@ -9,9 +9,8 @@ description: Model and solve convex quadratic programs (mean-variance portfolios
 costs stay on the variables (`add_vars(cost=...)`), `Q` is the Hessian. `Q` must be positive
 semidefinite for a minimisation (negative semidefinite for a maximisation); `solve()` checks it and
 raises a `ValueError` that names the smallest eigenvalue and the variables involved. A QP with
-integer variables (a cardinality limit, minimum buy-in) is a MIQP, which the solver refuses today
-with a typed error naming the class; for those, use the
-epigraph or a heuristic outside the solver and say so.
+integer variables (a cardinality limit, minimum buy-in) is a MIQP (`class: "miqp"`): see section 4
+for the experimental `miqp_oa` engine, which is off by default.
 
 `rusolve mip` and `rusolve solve` route a convex QP to the QP engine (`class: "convex_qp"`).
 
@@ -109,8 +108,69 @@ add a small ridge (`Q + 1e-8 I`) when `solve()` reports a tiny negative eigenval
   symmetric matrix when in doubt.
 - **Mixed scales.** Returns of order 0.1 and variances of order 1e-4 are fine; coefficients
   spanning more than 1e6 are not; `rusolve-cli lint` reports `coef-range` and `obj-range`.
-- **Integer weights ("lots") with a quadratic objective.** MIQP is refused with a typed error; see
-  the top of this page.
+- **Integer weights ("lots") with a quadratic objective.** MIQP is refused by default (exit 3, a
+  typed error that names `--opt miqp_oa=true`); section 4 says what the lever does and costs.
+
+## 4. Integer variables: the `miqp_oa` lever (experimental)
+
+A convex Q with integer or binary columns (cardinality limit, minimum buy-in, round lots) is class
+`miqp`. `rusolve-cli mip` and `solve` refuse it with exit 3 and a message that names the option. An
+experimental engine solves it by LP outer approximation over the MIP search (gradient cuts of the
+convex objective, checked at every incumbent), and it is **off by default because it is slower**
+than the linear MIP engine. Turn it on only for such a model, and give `--time-limit`:
+
+    rusolve-cli mip model.lp --opt miqp_oa=true --time-limit 60 --format json
+
+(`solve` has no `--opt`: set `RUSOLVE_EKK_OPTS=miqp_oa=true`. Through MCP, `load_model` accepts the
+model and `solve` takes `"options": {"miqp_oa": true}`.) The envelope has `class: "miqp"`,
+`engine: "oa"`, `convexity: "convex"` and a `miqp_oa` object (rounds, cuts, the exact objective and
+the largest epigraph violation at the incumbent). A nonconvex Q with integers stays refused;
+`--start`, `--basis` and `--add-rows` are refused with the lever. Related options, all off by
+default: `miqp_oa_disaggregate=true` (one epigraph per connected block of Q) and
+`miqp_oa_lazy_only=true` (keeps presolve). A quadratic *constraint* with integers is
+`rusolve-conic` territory.
+
+Two assets at most, each at least 10 % when held, checked by enumerating the held pair:
+
+```python
+import itertools, json, os, subprocess, tempfile
+
+CLI = os.environ.get("RSV_CLI", "rusolve-cli")
+work = tempfile.mkdtemp()
+mu = [0.06, 0.10, 0.13]
+var = [0.05, 0.12, 0.20]                       # diagonal covariance, to keep the enumeration short
+lam = 8.0                                      # objective: -mu'w + lam/2 * sum var_i w_i^2
+terms = " + ".join(f"{lam * var[i]:g} w{i} ^ 2" for i in range(3))
+lp = ("Minimize\n obj: " + " ".join(f"- {mu[i]} w{i}" for i in range(3)) + f" + [ {terms} ] / 2\n"
+      "Subject To\n budget: w0 + w1 + w2 = 1\n card: y0 + y1 + y2 <= 2\n"
+      + "".join(f" hi{i}: w{i} - y{i} <= 0\n lo{i}: w{i} - 0.1 y{i} >= 0\n" for i in range(3))
+      + "Bounds\n 0 <= w0 <= 1\n 0 <= w1 <= 1\n 0 <= w2 <= 1\nBinaries\n y0 y1 y2\nEnd\n")
+model = os.path.join(work, "card.lp")
+open(model, "w").write(lp)
+
+off = subprocess.run([CLI, "mip", model, "--format", "json"], capture_output=True, text=True)
+assert off.returncode == 3 and "miqp_oa=true" in off.stderr          # refused, and the message names the lever
+on = subprocess.run([CLI, "mip", model, "--opt", "miqp_oa=true", "--time-limit", "60", "--format", "json"],
+                    capture_output=True, text=True)
+assert on.returncode == 0, on.stderr
+env = json.loads(on.stdout)
+assert (env["class"], env["engine"], env["status"]) == ("miqp", "oa", "Optimal"), env
+
+def best_on(support):                          # minimise over w >= 0.1 on the support, sum w = 1 (1-D / 2-D grid)
+    best, n = None, 2000
+    for k in range(n + 1):
+        t = k / n
+        w = {support[0]: t, support[1]: 1 - t}
+        if min(w.values()) < 0.1 - 1e-12:
+            continue
+        f = sum(-mu[i] * v + lam / 2 * var[i] * v * v for i, v in w.items())
+        best = f if best is None else min(best, f)
+    return best
+
+want = min(best_on(p) for p in itertools.combinations(range(3), 2))
+assert abs(env["objective"] - want) < 1e-5, (env["objective"], want)
+print("objective", env["objective"], "enumeration", want)
+```
 
 ## What lint and classify say
 

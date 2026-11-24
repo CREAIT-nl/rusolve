@@ -1276,6 +1276,44 @@ fn mcp_convex_qp_and_general_constraints_solve_through_the_router() {
     );
 }
 
+/// Convex MIQP and mixed-integer conic models load; `solve` runs the experimental engine only
+/// with the lever in `options`, and otherwise says how to turn it on.
+#[test]
+fn mcp_miqp_and_mi_conic_solve_with_the_oa_levers() {
+    let miqp = "Minimize\n obj: - x - y + [ 2 x ^ 2 + 2 y ^ 2 ] / 2\nSubject To\n c1: x + y <= 1.5\nBounds\n 0 <= x <= 10\n 0 <= y <= 10\nGeneral\n x\nEnd\n";
+    let miconic = "Minimize\n obj: - x - y\nSubject To\n q1: [ x ^ 2 + y ^ 2 ] <= 1\nBounds\n x free\n y free\nGeneral\n x\nEnd\n";
+    let mut c = Client::spawn();
+    for (text, class, lever, want) in [
+        (miqp, "miqp", "miqp_oa", -0.25),
+        (miconic, "mi_conic", "misocp_oa", -1.0),
+    ] {
+        let m = c.ok("load_model", json!({"lp_text": text}));
+        assert_eq!(m["class"], json!(class), "{m}");
+        assert_eq!(m["engine"], json!("oa"), "{m}");
+        let id = m["model_id"].as_str().unwrap().to_string();
+        let e = c.err_text("solve", json!({"model_id": id}));
+        assert!(e.contains(&format!("{lever}=true")), "{e}");
+        let e = c.err_text(
+            "solve",
+            json!({"model_id": id, "options": {"presolve": "off"}}),
+        );
+        assert!(e.contains("options.presolve"), "{e}");
+        let r = c.ok("solve", json!({"model_id": id, "options": {lever: true}}));
+        assert_eq!(r["status"], json!("Optimal"), "{r}");
+        assert_eq!(r["class"], json!(class), "{r}");
+        assert!(
+            (r["objective"].as_f64().unwrap() - want).abs() < 1e-4,
+            "{r}"
+        );
+    }
+    // a nonconvex Q with an integer column is still refused at load
+    let e = c.err_text(
+        "load_model",
+        json!({"lp_text": miqp.replace("+ 2 y ^ 2", "+ - 2 y ^ 2")}),
+    );
+    assert!(e.contains("miqp") && e.contains("not supported"), "{e}");
+}
+
 #[test]
 fn mcp_prompts_are_the_skills_and_resources_are_the_schemas() {
     let mut c = Client::spawn();
@@ -1585,4 +1623,175 @@ fn mcp_load_model_errors_carry_the_reader_line() {
     assert_eq!(d["location"]["line"], json!(2), "{d}");
     assert!(d["location"]["column"].as_u64().unwrap() > 1, "{d}");
     let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// A 2-job 2-machine job shop written natively (intervals and no-overlap).
+fn job_shop_args(upper: i64) -> Value {
+    let mut vars = Vec::new();
+    for n in ["sA1", "eA1", "sA2", "eA2", "sB1", "eB1", "sB2", "eB2"] {
+        vars.push(json!({"name": n, "type": "integer", "upper": upper}));
+    }
+    vars.push(json!({"name": "mk", "type": "integer", "upper": upper, "objective": 1}));
+    json!({
+        "variables": vars,
+        "rows": [
+            {"name": "mkA", "terms": {"mk": 1, "eA2": -1}, "sense": ">=", "rhs": 0},
+            {"name": "mkB", "terms": {"mk": 1, "eB2": -1}, "sense": ">=", "rhs": 0},
+            {"name": "precA", "terms": {"sA2": 1, "eA1": -1}, "sense": ">=", "rhs": 0},
+            {"name": "precB", "terms": {"sB2": 1, "eB1": -1}, "sense": ">=", "rhs": 0}
+        ],
+        "cp": {
+            "intervals": [
+                {"name": "A1", "start": "sA1", "size": 2, "end": "eA1"},
+                {"name": "A2", "start": "sA2", "size": 3, "end": "eA2"},
+                {"name": "B1", "start": "sB1", "size": 2, "end": "eB1"},
+                {"name": "B2", "start": "sB2", "size": 3, "end": "eB2"}
+            ],
+            "no_overlap": [
+                {"name": "machine1", "intervals": ["A1", "B2"]},
+                {"name": "machine2", "intervals": ["A2", "B1"]}
+            ]
+        }
+    })
+}
+
+/// The job shop through `build_model` + `solve` with `mip_engine=cpsat`: the same optimum as the
+/// linearization, checked on the user's objects. Skips when the OR-Tools library is not found.
+#[test]
+fn mcp_cp_job_shop_solves_with_cpsat() {
+    let v = std::process::Command::new(env!("CARGO_BIN_EXE_rusolve-cli"))
+        .args(["version", "--format", "json"])
+        .output()
+        .unwrap();
+    let v: Value = serde_json::from_slice(&v.stdout).unwrap();
+    if v["cpsat"]["available"] != json!(true) {
+        eprintln!("skipped: the OR-Tools library was not found (set RUSOLVE_ORTOOLS_LIB)");
+        return;
+    }
+    let mut c = Client::spawn();
+    let built = c.ok("build_model", job_shop_args(12));
+    let id = built["model_id"].as_str().unwrap().to_string();
+    let lin = c.ok("solve", json!({"model_id": id}));
+    let r = c.ok(
+        "solve",
+        json!({"model_id": id, "include_solution": true, "options": {"mip_engine": "cpsat", "mip_rel_gap": 0.0}}),
+    );
+    assert_eq!(r["status"], json!("Optimal"), "{r}");
+    assert_eq!(r["class"], json!("cp"), "{r}");
+    assert_eq!(r["engine"], json!("cp-sat"), "{r}");
+    assert_eq!(r["cp"]["verified"], json!(true), "{r}");
+    assert_eq!(r["cpsat"]["status"], json!("OPTIMAL"), "{r}");
+    assert!(r["cpsat"]["ortools_library"].is_string(), "{r}");
+    assert!(
+        (r["objective"].as_f64().unwrap() - lin["objective"].as_f64().unwrap()).abs() < 1e-6,
+        "{r} vs {lin}"
+    );
+    assert_eq!(r["solution"]["columns"].as_array().unwrap().len(), 9);
+    // an engine name that does not exist is a tool error naming it
+    let e = c.err_raw(
+        "solve",
+        json!({"model_id": id, "options": {"mip_engine": "nosuch"}}),
+    );
+    assert!(e.contains("RS0004") && e.contains("nosuch"), "{e}");
+}
+
+/// The job shop solves through `build_model` + `solve`; the answer is checked on the user's
+/// objects and matches a brute-force optimum computed here.
+#[test]
+fn mcp_cp_job_shop_solves_and_checks_on_the_objects() {
+    // brute force: A1 (m1, 2) then A2 (m2, 3); B1 (m2, 2) then B2 (m1, 3)
+    let overlap = |s1: i64, d1: i64, s2: i64, d2: i64| s1 < s2 + d2 && s2 < s1 + d1;
+    let mut best = i64::MAX;
+    for a1 in 0..=9 {
+        for a2 in (a1 + 2)..=9 {
+            for b1 in 0..=9 {
+                for b2 in (b1 + 2)..=9 {
+                    if overlap(a1, 2, b2, 3) || overlap(a2, 3, b1, 2) {
+                        continue;
+                    }
+                    best = best.min((a2 + 3).max(b2 + 3));
+                }
+            }
+        }
+    }
+    let mut c = Client::spawn();
+    let built = c.ok("build_model", job_shop_args(12));
+    assert_eq!(built["class"], json!("cp"), "{built}");
+    assert_eq!(built["engine"], json!("cp-linearization"), "{built}");
+    let id = built["model_id"].as_str().unwrap().to_string();
+    let r = c.ok("solve", json!({"model_id": id, "include_solution": true}));
+    assert_eq!(r["status"], json!("Optimal"), "{r}");
+    assert_eq!(r["class"], json!("cp"));
+    assert_eq!(r["cp"]["verified"], json!(true), "{r}");
+    assert!(
+        (r["objective"].as_f64().unwrap() - best as f64).abs() < 1e-6,
+        "{r} vs {best}"
+    );
+    // the solution has the user's 9 columns, not the linearization's
+    assert_eq!(r["solution"]["columns"].as_array().unwrap().len(), 9);
+    let sol = c.ok("get_solution", json!({"model_id": id}));
+    assert_eq!(sol["total_columns"], json!(9));
+
+    // check_solution evaluates the objects: A1 and B2 on machine 1 at the same time overlap
+    let values = json!({"sA1": 0, "eA1": 2, "sA2": 2, "eA2": 5, "sB1": 5, "eB1": 7, "sB2": 0, "eB2": 3, "mk": 7});
+    let rep = c.ok(
+        "check_solution",
+        json!({"model_id": id, "solution": {"values": values}}),
+    );
+    assert_eq!(rep["summary"]["cp"]["count"], json!(1), "{rep}");
+    assert_eq!(rep["verdict"], json!("infeasible"), "{rep}");
+    let f = rep["findings"].as_array().unwrap();
+    assert!(
+        f.iter()
+            .any(|x| x["kind"] == "no_overlap" && x["name"] == "machine1"),
+        "{rep}"
+    );
+    let good = json!({"sA1": 0, "eA1": 2, "sA2": 2, "eA2": 5, "sB1": 5, "eB1": 7, "sB2": 7, "eB2": 10, "mk": 10});
+    let rep = c.ok(
+        "check_solution",
+        json!({"model_id": id, "solution": {"values": good}}),
+    );
+    assert_eq!(rep["verdict"], json!("feasible"), "{rep}");
+    assert_eq!(rep["summary"]["cp"]["count"], json!(0), "{rep}");
+
+    // tools that would ignore the objects refuse with the typed code
+    for tool in ["explain", "lint", "ranging", "feasrelax", "modify"] {
+        let e = c.err_text(tool, json!({"model_id": id}));
+        assert!(
+            e.contains("RS4012") && e.contains("no_overlap 'machine1'"),
+            "{tool}: {e}"
+        );
+    }
+
+    // errors name the JSON path
+    let mut bad = job_shop_args(12);
+    bad["cp"]["no_overlap"][1]["intervals"][0] = json!("ZZ");
+    let e = c.err_text("build_model", bad);
+    assert!(e.starts_with("cp.no_overlap[1].intervals[0]:"), "{e}");
+    // a continuous variable in an object is RS4011 naming the entry
+    let mut bad = job_shop_args(12);
+    bad["variables"][1] = json!({"name": "eA1", "upper": 12});
+    let e = c.err_text("build_model", bad);
+    assert!(
+        e.starts_with("cp.intervals[0]:") && e.contains("RS4011"),
+        "{e}"
+    );
+
+    // a horizon beyond the fallback's limit is a typed refusal that names the CP-SAT engine
+    let big = c.ok(
+        "build_model",
+        json!({
+            "variables": [
+                {"name": "s", "type": "integer", "upper": 5000},
+                {"name": "e", "type": "integer", "upper": 5002, "objective": 1}
+            ],
+            "cp": {
+                "intervals": [{"name": "a", "start": "s", "size": 2, "end": "e"}],
+                "cumulative": [{"name": "r", "intervals": ["a"], "demands": [1], "capacity": 1}]
+            }
+        }),
+    );
+    let bid = big["model_id"].as_str().unwrap().to_string();
+    let e = c.err_text("solve", json!({"model_id": bid}));
+    assert!(e.starts_with("RS4013:") && e.contains("CP-SAT"), "{e}");
 }

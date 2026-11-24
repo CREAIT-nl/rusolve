@@ -1,0 +1,23 @@
+[package]
+name = "rusolve-cpsat"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Optional OR-Tools CP-SAT engine: HighsLp and CP objects to CpModelProto, solved through the OR-Tools C API loaded at run time"
+
+# OR-Tools is not needed to build: the shared library is opened at run time (src/runtime.rs,
+# docs/design/cpsat-engine.md).
+
+[dependencies]
+rusolve-ekk.workspace = true
+rusolve-io.workspace = true
+# CpModelProto / SatParameters / CpSolverResponse, generated from the .proto files of OR-Tools 9.15
+prost = "0.14"
+# opens the OR-Tools shared library at run time (ISC licence)
+libloading = "0.8"
+
+[build-dependencies]
+# compile the .proto files without a protoc binary
+protox = "0.9"
+prost-build = "0.14"

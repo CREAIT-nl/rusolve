@@ -1869,6 +1869,100 @@ pub static OPTION_RECORDS: &[OptionRecord] = &[
         tunable: true,
     },
     OptionRecord {
+        name: "mip_lp_skip_refactor_check",
+        description: "MIP and sub-MIP LP relaxations skip the factor accuracy test on a simplex rebuild (rebuild_refactor_solution_error_tolerance = 0); default-off lever",
+        advanced: true,
+        kind: RecordKind::Bool { default: false },
+        source: "rusolve",
+        affects: Affects::Search,
+        tunable: true,
+    },
+    OptionRecord {
+        name: "mip_lp_keep_dse_weights",
+        description: "MIP LP relaxations keep dual steepest-edge weights across basis restores and cut changes: 0 off, 1 from the last solve, 2 also stored with each search basis; default-off lever",
+        advanced: true,
+        kind: RecordKind::Int {
+            lower: 0,
+            default: 0,
+            upper: 2,
+        },
+        source: "Forrest and Goldfarb 1992 (Math. Programming 57); rusolve",
+        affects: Affects::Search,
+        tunable: true,
+    },
+    OptionRecord {
+        name: "miqp_oa",
+        description: "Solve a convex MIQP by LP-based outer approximation (epigraph, root tangent, tree gradient cuts, exactness loop); default-off lever, off keeps the typed refusal",
+        advanced: true,
+        kind: RecordKind::Bool { default: false },
+        source: "Duran and Grossmann 1986 (Math. Programming 36); Quesada and Grossmann 1992 (Computers & Chemical Engineering 16); Vielma, Dunning, Huchette and Lubin 2017 (Math. Programming Computation 9)",
+        affects: Affects::Search,
+        tunable: false,
+    },
+    OptionRecord {
+        name: "miqp_oa_disaggregate",
+        description: "With miqp_oa, one epigraph column per connected block of Q instead of one for the whole objective; default-off lever",
+        advanced: true,
+        kind: RecordKind::Bool { default: false },
+        source: "Duran and Grossmann 1986 (Math. Programming 36); Quesada and Grossmann 1992 (Computers & Chemical Engineering 16); Vielma, Dunning, Huchette and Lubin 2017 (Math. Programming Computation 9)",
+        affects: Affects::Search,
+        tunable: false,
+    },
+    OptionRecord {
+        name: "miqp_oa_lazy_only",
+        description: "With miqp_oa, cut only at the root and at candidate incumbents, not at tree LP points (keeps presolve on); default-off lever",
+        advanced: true,
+        kind: RecordKind::Bool { default: false },
+        source: "Duran and Grossmann 1986 (Math. Programming 36); Quesada and Grossmann 1992 (Computers & Chemical Engineering 16); Vielma, Dunning, Huchette and Lubin 2017 (Math. Programming Computation 9)",
+        affects: Affects::Search,
+        tunable: false,
+    },
+    OptionRecord {
+        name: "misocp_oa",
+        description: "Solve a mixed-integer SOCP / convex MIQCQP by LP outer approximation (cone gradient cuts, root SOCP, fixed-integer polish, checker-confirmed answer); default-off lever, off keeps the typed refusal",
+        advanced: true,
+        kind: RecordKind::Bool { default: false },
+        source: "Duran and Grossmann 1986 (Math. Programming 36); Quesada and Grossmann 1992 (Computers & Chemical Engineering 16); Vielma, Dunning, Huchette and Lubin 2017 (Math. Programming Computation 9); Goulart and Chen 2024 (Clarabel, arXiv:2405.12762)",
+        affects: Affects::Search,
+        tunable: false,
+    },
+    OptionRecord {
+        name: "misocp_oa_disaggregate",
+        description: "With misocp_oa, write each second-order cone in the disaggregated extended formulation (one 3-column cone per component); default-off lever",
+        advanced: true,
+        kind: RecordKind::Bool { default: false },
+        source: "Duran and Grossmann 1986 (Math. Programming 36); Quesada and Grossmann 1992 (Computers & Chemical Engineering 16); Vielma, Dunning, Huchette and Lubin 2017 (Math. Programming Computation 9); Goulart and Chen 2024 (Clarabel, arXiv:2405.12762)",
+        affects: Affects::Search,
+        tunable: false,
+    },
+    OptionRecord {
+        name: "misocp_oa_no_polish",
+        description: "With misocp_oa, do not solve the continuous SOCP at fixed integers for each candidate (measures the polish); default-off lever",
+        advanced: true,
+        kind: RecordKind::Bool { default: false },
+        source: "Duran and Grossmann 1986 (Math. Programming 36); Quesada and Grossmann 1992 (Computers & Chemical Engineering 16); Vielma, Dunning, Huchette and Lubin 2017 (Math. Programming Computation 9); Goulart and Chen 2024 (Clarabel, arXiv:2405.12762)",
+        affects: Affects::Search,
+        tunable: false,
+    },
+    OptionRecord {
+        name: "misocp_oa_lazy_only",
+        description: "With misocp_oa, cut only at the root and at candidate incumbents, not at tree LP points (keeps presolve on); default-off lever",
+        advanced: true,
+        kind: RecordKind::Bool { default: false },
+        source: "Duran and Grossmann 1986 (Math. Programming 36); Quesada and Grossmann 1992 (Computers & Chemical Engineering 16); Vielma, Dunning, Huchette and Lubin 2017 (Math. Programming Computation 9); Goulart and Chen 2024 (Clarabel, arXiv:2405.12762)",
+        affects: Affects::Search,
+        tunable: false,
+    },
+    OptionRecord {
+        name: "mip_engine",
+        description: "Engine for a MIP: \"highs\" (the port) or \"cpsat\" (Google OR-Tools CP-SAT; needs a build with the cpsat feature, every column integer with finite bounds and integral rows)",
+        advanced: true,
+        kind: RecordKind::Str { default: "highs" },
+        source: "Google OR-Tools CP-SAT 9.15 (Apache-2.0), github.com/google/or-tools",
+        affects: Affects::Search,
+        tunable: false,
+    },
+    OptionRecord {
         name: "mip_tableau_loosen",
         description: "Tableau separator without HiGHS weight-range 1e4, density and row-length caps, latched off after 2 stalled calls; 30n20b8 root 130 to 151, hurts neos-911970/abz6; default-off lever",
         advanced: true,
@@ -1967,6 +2061,84 @@ pub static OPTION_RECORDS: &[OptionRecord] = &[
         tunable: true,
     },
     OptionRecord {
+        name: "mip_child_selection",
+        description: "Default 8. Main-search dive child rule: 0 up, 1 down, 2 root solution, 3 objective, 4 random, 5 best cost, 6 worst cost, 7 disjunction, 8 hybrid (HiGHS sub-MIP rule); -1 = HiGHS",
+        advanced: true,
+        kind: RecordKind::Int {
+            lower: -1,
+            default: 8,
+            upper: 8,
+        },
+        source: "HiGHS 1.16.0",
+        affects: Affects::Search,
+        tunable: true,
+    },
+    OptionRecord {
+        name: "mip_child_selection_switch_gap",
+        description: "Default 0.02. With mip_child_selection set: use the HiGHS root-solution child rule once the relative gap is at or below this value; 0 = never switch",
+        advanced: true,
+        kind: RecordKind::Double {
+            lower: 0.0,
+            default: 0.02,
+            upper: f64::INFINITY,
+        },
+        source: "rusolve",
+        affects: Affects::Search,
+        tunable: true,
+    },
+    OptionRecord {
+        name: "mip_plunge_gap",
+        description: "Default 0 (off). The mip_plunge_* levers act once the relative gap between the global lower bound and the upper limit is at or below this value (main search only)",
+        advanced: true,
+        kind: RecordKind::Double {
+            lower: 0.0,
+            default: 0.0,
+            upper: f64::INFINITY,
+        },
+        source: "rusolve",
+        affects: Affects::Search,
+        tunable: true,
+    },
+    OptionRecord {
+        name: "mip_plunge_quot",
+        description: "Default 0 (off). Under mip_plunge_gap: plunge only into nodes whose lower bound is at most lb + quot * (cutoff - lb); others go to the queue",
+        advanced: true,
+        kind: RecordKind::Double {
+            lower: 0.0,
+            default: 0.0,
+            upper: f64::INFINITY,
+        },
+        source: "SCIP 11.0.0 / Achterberg 2007",
+        affects: Affects::Search,
+        tunable: true,
+    },
+    OptionRecord {
+        name: "mip_plunge_max_nodes",
+        description: "Default 0 (HiGHS, 100). Under mip_plunge_gap: node limit of one plunge",
+        advanced: true,
+        kind: RecordKind::Int {
+            lower: 0,
+            default: 0,
+            upper: 2147483647,
+        },
+        source: "SCIP 11.0.0 / Achterberg 2007",
+        affects: Affects::Search,
+        tunable: true,
+    },
+    OptionRecord {
+        name: "mip_plunge_bestbound_freq",
+        description: "Default 0 (HiGHS, 10). Under mip_plunge_gap: take the best-bound queue node every this many queue picks",
+        advanced: true,
+        kind: RecordKind::Int {
+            lower: 0,
+            default: 0,
+            upper: 2147483647,
+        },
+        source: "SCIP 11.0.0 / Achterberg 2007",
+        affects: Affects::Search,
+        tunable: true,
+    },
+    OptionRecord {
         name: "mip_cutoff_bigm",
         description: "Default-off lever. Restart when the incumbent cutoff lets presolve tighten big-M coefficients (Savelsbergh coefficient tightening on cutoff-propagated bounds)",
         advanced: true,
@@ -2007,6 +2179,85 @@ pub static OPTION_RECORDS: &[OptionRecord] = &[
             upper: 1.0,
         },
         source: "rusolve",
+        affects: Affects::Search,
+        tunable: true,
+    },
+    OptionRecord {
+        name: "mip_node_sepa_maxbounddist",
+        description: "Separate cuts at a tree node only if (node bound - global bound) <= this fraction of (cutoff - global bound), as SCIP's separator maxbounddist; 1 = every node (HiGHS)",
+        advanced: true,
+        kind: RecordKind::Double {
+            lower: 0.0,
+            default: 1.0,
+            upper: 1.0,
+        },
+        source: "SCIP 11.0.0",
+        affects: Affects::Search,
+        tunable: true,
+    },
+    OptionRecord {
+        name: "mip_node_sepa_freq",
+        description: "Separate cuts at a tree node only if its depth is a multiple of this, as SCIP's separator freq; 1 = every node (HiGHS)",
+        advanced: true,
+        kind: RecordKind::Int {
+            lower: 1,
+            default: 1,
+            upper: 1000000,
+        },
+        source: "SCIP 11.0.0",
+        affects: Affects::Search,
+        tunable: true,
+    },
+    OptionRecord {
+        name: "mip_node_rounding",
+        description: "Every k-th dive node, round its LP solution (lock rounding, activity-aware rounding, shifting repair; no LP solve) and try it as an incumbent; 0 = off (HiGHS); default-off lever",
+        advanced: true,
+        kind: RecordKind::Int {
+            lower: 0,
+            default: 0,
+            upper: 1000000,
+        },
+        source: "SCIP 11.0.0",
+        affects: Affects::Search,
+        tunable: true,
+    },
+    OptionRecord {
+        name: "mip_node_rounding_polish",
+        description: "With mip_node_rounding, improve each found point by 1-opt (single columns moved toward a lower objective, rows kept feasible) before trying it; default-off lever",
+        advanced: true,
+        kind: RecordKind::Bool { default: false },
+        source: "SCIP 11.0.0",
+        affects: Affects::Search,
+        tunable: true,
+    },
+    OptionRecord {
+        name: "mip_node_sepa_pool_only",
+        description: "At tree nodes that mip_node_sepa_maxbounddist or mip_node_sepa_freq exclude, still add violated cut-pool cuts (no separators run); default-off lever",
+        advanced: true,
+        kind: RecordKind::Bool { default: false },
+        source: "rusolve",
+        affects: Affects::Search,
+        tunable: true,
+    },
+    OptionRecord {
+        name: "mip_node_sepa_max_rounds",
+        description: "At most this many cut separation rounds at a tree node, as SCIP's separating/maxrounds; 0 = no limit (HiGHS)",
+        advanced: true,
+        kind: RecordKind::Int {
+            lower: 0,
+            default: 0,
+            upper: 1000000,
+        },
+        source: "SCIP 11.0.0",
+        affects: Affects::Search,
+        tunable: true,
+    },
+    OptionRecord {
+        name: "mip_node_install_basis",
+        description: "A node taken from the queue starts its LP from its parent's stored basis, cut rows matched by identity (SCIP restores the LP state of the node's fork); default-off lever",
+        advanced: true,
+        kind: RecordKind::Bool { default: false },
+        source: "SCIP 11.0.0",
         affects: Affects::Search,
         tunable: true,
     },
@@ -2489,7 +2740,16 @@ pub static OPTION_RECORDS: &[OptionRecord] = &[
     },
     OptionRecord {
         name: "mip_strengthen_cover_guard",
-        description: "Flag. Exit the 1.16.0 strengthenInequalities cover loop when slackupper < 0 (HiGHS asserts it), where it can loop forever; on in recommended; lever",
+        description: "Flag. Exit the 1.16.0 strengthenInequalities cover loop when slackupper < 0 (HiGHS asserts it) or the step is not positive, where it can loop forever; on in recommended; lever",
+        advanced: true,
+        kind: RecordKind::Bool { default: false },
+        source: "rusolve",
+        affects: Affects::Search,
+        tunable: true,
+    },
+    OptionRecord {
+        name: "mip_presolve_exact_strengthen",
+        description: "Flag. Presolve coefficient strengthening writes the new coefficient exactly, not via a rounded delta that cancels on a big-M and can cut off the optimum; on in recommended; lever",
         advanced: true,
         kind: RecordKind::Bool { default: false },
         source: "rusolve",
@@ -3691,6 +3951,16 @@ option_field_accessors! {
     "mip_cut_selection_hybrid" => mip_cut_selection_hybrid : OptionValue::Bool;
     "mip_knapsack_cover_sepa" => mip_knapsack_cover_sepa : OptionValue::Bool;
     "mip_dff_separator" => mip_dff_separator : OptionValue::Bool;
+    "mip_lp_skip_refactor_check" => mip_lp_skip_refactor_check : OptionValue::Bool;
+    "mip_lp_keep_dse_weights" => mip_lp_keep_dse_weights : OptionValue::Int;
+    "miqp_oa" => miqp_oa : OptionValue::Bool;
+    "miqp_oa_disaggregate" => miqp_oa_disaggregate : OptionValue::Bool;
+    "miqp_oa_lazy_only" => miqp_oa_lazy_only : OptionValue::Bool;
+    "misocp_oa" => misocp_oa : OptionValue::Bool;
+    "misocp_oa_disaggregate" => misocp_oa_disaggregate : OptionValue::Bool;
+    "misocp_oa_no_polish" => misocp_oa_no_polish : OptionValue::Bool;
+    "misocp_oa_lazy_only" => misocp_oa_lazy_only : OptionValue::Bool;
+    "mip_engine" => mip_engine : OptionValue::Str;
     "mip_tableau_loosen" => mip_tableau_loosen : OptionValue::Bool;
     "mip_tableau_loosen_auto" => mip_tableau_loosen_auto : OptionValue::Bool;
     "mip_ti_precedence_sepa" => mip_ti_precedence_sepa : OptionValue::Bool;
@@ -3701,12 +3971,25 @@ option_field_accessors! {
     "mip_ti_list_sched" => mip_ti_list_sched : OptionValue::Bool;
     "mip_cont_prop_improve" => mip_cont_prop_improve : OptionValue::Double;
     "mip_pscost_variance_tol" => mip_pscost_variance_tol : OptionValue::Double;
+    "mip_child_selection" => mip_child_selection : OptionValue::Int;
+    "mip_child_selection_switch_gap" => mip_child_selection_switch_gap : OptionValue::Double;
+    "mip_plunge_gap" => mip_plunge_gap : OptionValue::Double;
+    "mip_plunge_quot" => mip_plunge_quot : OptionValue::Double;
+    "mip_plunge_max_nodes" => mip_plunge_max_nodes : OptionValue::Int;
+    "mip_plunge_bestbound_freq" => mip_plunge_bestbound_freq : OptionValue::Int;
     "mip_cutoff_bigm" => mip_cutoff_bigm : OptionValue::Bool;
     "mip_node_bigm" => mip_node_bigm : OptionValue::Bool;
     "mip_node_bigm_rows" => mip_node_bigm_rows : OptionValue::Bool;
     "mip_node_bigm_min_ratio" => mip_node_bigm_min_ratio : OptionValue::Double;
     "mip_rens_min_fixing_rate" => mip_rens_min_fixing_rate : OptionValue::Double;
     "mip_node_bigm_active" => mip_node_bigm_active : OptionValue::Double;
+    "mip_node_sepa_maxbounddist" => mip_node_sepa_maxbounddist : OptionValue::Double;
+    "mip_node_sepa_freq" => mip_node_sepa_freq : OptionValue::Int;
+    "mip_node_sepa_pool_only" => mip_node_sepa_pool_only : OptionValue::Bool;
+    "mip_node_sepa_max_rounds" => mip_node_sepa_max_rounds : OptionValue::Int;
+    "mip_node_install_basis" => mip_node_install_basis : OptionValue::Bool;
+    "mip_node_rounding" => mip_node_rounding : OptionValue::Int;
+    "mip_node_rounding_polish" => mip_node_rounding_polish : OptionValue::Bool;
     "mip_debug_solution_file" => mip_debug_solution_file : OptionValue::Str;
     "mip_detect_symmetry" => mip_detect_symmetry : OptionValue::Bool;
     "mip_feasibility_tolerance" => mip_feasibility_tolerance : OptionValue::Double;
@@ -3751,6 +4034,7 @@ option_field_accessors! {
     "mip_root_presolve_only" => mip_root_presolve_only : OptionValue::Bool;
     "mip_search_simulate_concurrency" => mip_search_simulate_concurrency : OptionValue::Bool;
     "mip_strengthen_cover_guard" => mip_strengthen_cover_guard : OptionValue::Bool;
+    "mip_presolve_exact_strengthen" => mip_presolve_exact_strengthen : OptionValue::Bool;
     "mip_symmetry_dynamic" => mip_symmetry_dynamic : OptionValue::Bool;
     "mip_aggregate_implications" => mip_aggregate_implications : OptionValue::Bool;
     "mip_cdouble_act_contrib" => mip_cdouble_act_contrib : OptionValue::Bool;
@@ -4316,6 +4600,16 @@ mod tests {
             "mip_cut_selection_hybrid",
             "mip_knapsack_cover_sepa",
             "mip_dff_separator",
+            "mip_lp_skip_refactor_check",
+            "mip_lp_keep_dse_weights",
+            "miqp_oa",
+            "miqp_oa_disaggregate",
+            "miqp_oa_lazy_only",
+            "misocp_oa",
+            "misocp_oa_disaggregate",
+            "misocp_oa_no_polish",
+            "misocp_oa_lazy_only",
+            "mip_engine",
             "mip_tableau_loosen",
             "mip_tableau_loosen_auto",
             "mip_ti_precedence_sepa",
@@ -4326,12 +4620,25 @@ mod tests {
             "mip_ti_list_sched",
             "mip_cont_prop_improve",
             "mip_pscost_variance_tol",
+            "mip_child_selection",
+            "mip_child_selection_switch_gap",
+            "mip_plunge_gap",
+            "mip_plunge_quot",
+            "mip_plunge_max_nodes",
+            "mip_plunge_bestbound_freq",
             "mip_cutoff_bigm",
             "mip_node_bigm",
             "mip_node_bigm_rows",
             "mip_node_bigm_min_ratio",
             "mip_rens_min_fixing_rate",
             "mip_node_bigm_active",
+            "mip_node_sepa_maxbounddist",
+            "mip_node_sepa_freq",
+            "mip_node_sepa_pool_only",
+            "mip_node_sepa_max_rounds",
+            "mip_node_install_basis",
+            "mip_node_rounding",
+            "mip_node_rounding_polish",
             "mip_debug_solution_file",
             "mip_detect_symmetry",
             "mip_feasibility_tolerance",
@@ -4386,6 +4693,7 @@ mod tests {
             "mip_root_presolve_only",
             "mip_search_simulate_concurrency",
             "mip_strengthen_cover_guard",
+            "mip_presolve_exact_strengthen",
             "mip_symmetry_dynamic",
             "mip_aggregate_implications",
             "mip_cdouble_act_contrib",
@@ -4660,6 +4968,16 @@ mod tests {
             mip_cut_selection_hybrid: _,
             mip_knapsack_cover_sepa: _,
             mip_dff_separator: _,
+            mip_lp_skip_refactor_check: _,
+            mip_lp_keep_dse_weights: _,
+            miqp_oa: _,
+            miqp_oa_disaggregate: _,
+            miqp_oa_lazy_only: _,
+            misocp_oa: _,
+            misocp_oa_disaggregate: _,
+            misocp_oa_no_polish: _,
+            misocp_oa_lazy_only: _,
+            mip_engine: _,
             mip_tableau_loosen: _,
             mip_tableau_loosen_auto: _,
             mip_ti_precedence_sepa: _,
@@ -4670,12 +4988,25 @@ mod tests {
             mip_ti_list_sched: _,
             mip_cont_prop_improve: _,
             mip_pscost_variance_tol: _,
+            mip_child_selection: _,
+            mip_child_selection_switch_gap: _,
+            mip_plunge_gap: _,
+            mip_plunge_quot: _,
+            mip_plunge_max_nodes: _,
+            mip_plunge_bestbound_freq: _,
             mip_cutoff_bigm: _,
             mip_node_bigm: _,
             mip_node_bigm_rows: _,
             mip_node_bigm_min_ratio: _,
             mip_rens_min_fixing_rate: _,
             mip_node_bigm_active: _,
+            mip_node_sepa_maxbounddist: _,
+            mip_node_sepa_freq: _,
+            mip_node_sepa_pool_only: _,
+            mip_node_sepa_max_rounds: _,
+            mip_node_install_basis: _,
+            mip_node_rounding: _,
+            mip_node_rounding_polish: _,
             mip_debug_solution_file: _,
             mip_detect_symmetry: _,
             mip_feasibility_tolerance: _,
@@ -4720,6 +5051,7 @@ mod tests {
             mip_root_presolve_only: _,
             mip_search_simulate_concurrency: _,
             mip_strengthen_cover_guard: _,
+            mip_presolve_exact_strengthen: _,
             mip_symmetry_dynamic: _,
             mip_aggregate_implications: _,
             mip_cdouble_act_contrib: _,
@@ -4809,7 +5141,7 @@ mod tests {
         covered.extend_from_slice(INTERNAL_FIELDS);
         covered.sort_unstable();
         assert_eq!(covered, all_field_names());
-        assert_eq!(OPTION_RECORDS.len() + INTERNAL_FIELDS.len(), 321);
+        assert_eq!(OPTION_RECORDS.len() + INTERNAL_FIELDS.len(), 345);
     }
 
     #[test]
@@ -5177,12 +5509,22 @@ mod tests {
             .filter(|record| {
                 !matches!(
                     record.name,
-                    "mip_cont_prop_improve"
+                    "mip_engine"
+                        | "mip_cont_prop_improve"
                         | "mip_improve_early_work"
                         | "mip_node_bigm_min_ratio"
                         | "mip_rens_min_fixing_rate"
                         | "mip_node_bigm_active"
+                        | "mip_node_sepa_maxbounddist"
+                        | "mip_node_sepa_freq"
+                        | "mip_node_sepa_max_rounds"
                         | "mip_pscost_variance_tol"
+                        | "mip_child_selection"
+                        | "mip_child_selection_switch_gap"
+                        | "mip_plunge_gap"
+                        | "mip_plunge_quot"
+                        | "mip_plunge_max_nodes"
+                        | "mip_plunge_bestbound_freq"
                         | "mip_presolve_xor_gf2"
                         | "mip_orbitope_root_fix"
                         | "lp_fold"
@@ -5224,6 +5566,18 @@ mod tests {
                     lower: 0,
                     default: 0,
                     upper: 63,
+                }
+            } else if record.name == "mip_node_rounding" {
+                RecordKind::Int {
+                    lower: 0,
+                    default: 0,
+                    upper: 1000000,
+                }
+            } else if record.name == "mip_lp_keep_dse_weights" {
+                RecordKind::Int {
+                    lower: 0,
+                    default: 0,
+                    upper: 2,
                 }
             } else if record.name == "mip_presolve_probing_useless" {
                 RecordKind::Int {

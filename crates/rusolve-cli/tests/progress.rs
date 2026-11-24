@@ -312,3 +312,57 @@ fn progress_watchdog_interrupts_a_solve_that_reaches_limit_checks() {
     );
     assert_eq!(env["limit"]["improving"]["tracked"], true);
 }
+
+/// mad from the benchmark corpus, `None` when absent.
+fn mad() -> Option<PathBuf> {
+    let out = Command::new("sh")
+        .arg("-c")
+        .arg("echo ~/.cache/rusolve-bench/miplib-benchmark/mad.mps.gz")
+        .output()
+        .ok()?;
+    let p = PathBuf::from(String::from_utf8(out.stdout).ok()?.trim());
+    p.exists().then_some(p)
+}
+
+/// mad, seed 0, with these three node options: a RENS sub-MIP nested two RINS levels
+/// deep reaches a strengthenInequalities cover-loop fixed point with `slackupper >= 0`
+/// (a step of value 0). The cover guard's step exit ends it, so the solve stops at the
+/// 120 s limit; without that exit it never returns. Single thread, about 2 minutes.
+#[test]
+#[ignore = "slow"]
+fn mad_cover_loop_step_guard_keeps_the_time_limit() {
+    let Some(model) = mad() else {
+        eprintln!("mad.mps.gz is not in the bench cache: test skipped");
+        return;
+    };
+    let start = Instant::now();
+    let (code, stdout, stderr) = mip(
+        &model,
+        &[
+            "--csv",
+            "--threads",
+            "1",
+            "--time-limit",
+            "120",
+            "--seed",
+            "0",
+            "--opt",
+            "mip_skip_analytic_centre=true",
+            "--opt",
+            "mip_node_sepa_freq=5",
+            "--opt",
+            "mip_node_sepa_pool_only=true",
+        ],
+    );
+    let wall = start.elapsed().as_secs_f64();
+    assert_eq!(code, 0, "stderr: {stderr}");
+    assert!(wall < 120.0 + 30.0, "returned after {wall:.1}s");
+    let status = stdout
+        .lines()
+        .nth(1)
+        .unwrap_or("")
+        .split(',')
+        .next()
+        .unwrap_or("");
+    assert!(["TimeLimit", "Optimal"].contains(&status), "{stdout}");
+}

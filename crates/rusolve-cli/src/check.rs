@@ -84,7 +84,8 @@ pub struct Tolerances {
 #[derive(Serialize, Debug, Clone)]
 pub struct Finding {
     /// `column_bound`, `row`, `integrality`, or `semi_continuous`,
-    /// `indicator`, `sos`, `pwl`, `function`.
+    /// `indicator`, `sos`, `pwl`, `function`, and the CP kinds `interval`, `no_overlap`,
+    /// `cumulative`, `all_different`, `element`, `table`.
     pub kind: &'static str,
     pub name: String,
     /// Column value (`column_bound`, `integrality`) or row activity (`row`).
@@ -128,6 +129,9 @@ pub struct Summary {
     /// model with none.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub general_constraints: Option<Counts>,
+    /// Scheduling and combinatorial (CP) objects; absent for a model with none.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cp: Option<Counts>,
     pub total_violations: i64,
 }
 
@@ -229,7 +233,35 @@ pub fn check_solution_gc(
     model_path: &str,
     solution_path: &str,
 ) -> Result<CheckReport, InputError> {
+    check_solution_objects(
+        lp,
+        gc,
+        None,
+        col_value,
+        tol,
+        max_findings,
+        model_path,
+        solution_path,
+    )
+}
+
+/// [`check_solution_gc`] plus the scheduling and combinatorial (CP) objects: interval, no-overlap,
+/// cumulative, all-different, element and table, evaluated on the user's objects. No file format
+/// carries CP objects, so `rusolve check` passes `None`; the Python API and the MCP
+/// `check_solution` tool pass the model's.
+#[allow(clippy::too_many_arguments)]
+pub fn check_solution_objects(
+    lp: &HighsLp,
+    gc: Option<&rusolve_io::GcModel>,
+    cp: Option<&rusolve_io::CpModel>,
+    col_value: &[f64],
+    tol: Tolerances,
+    max_findings: usize,
+    model_path: &str,
+    solution_path: &str,
+) -> Result<CheckReport, InputError> {
     let gc = gc.filter(|g| !g.is_empty());
+    let cp = cp.filter(|k| !k.is_empty());
     // The ported assessors log through `log_options`; silence them (stdout is
     // the report).
     let mut options = HighsOptions {
@@ -271,6 +303,7 @@ pub fn check_solution_gc(
         rows: Counts::default(),
         integrality: Counts::default(),
         general_constraints: None,
+        cp: None,
         total_violations: 0,
     };
     for (ix, &value) in col_value.iter().enumerate() {
@@ -377,6 +410,31 @@ pub fn check_solution_gc(
         }
         summary.total_violations += counts.count;
         summary.general_constraints = Some(counts);
+    }
+    if let Some(cpm) = cp {
+        let mut counts = Counts::default();
+        for v in cpm.check(
+            col_value,
+            &lp.col_names_,
+            rusolve_io::CpTol {
+                integrality: tol.mip_feasibility_tolerance,
+            },
+        ) {
+            counts.add(v.amount);
+            findings.push(Finding {
+                kind: v.kind,
+                name: v.name,
+                value: v.amount,
+                lower: None,
+                upper: None,
+                violated_bound: None,
+                nearest_integer: None,
+                amount: v.amount,
+                detail: Some(v.detail),
+            });
+        }
+        summary.total_violations += counts.count;
+        summary.cp = Some(counts);
     }
 
     // get_kkt_failures as call_solve_mip runs it (highs_run.rs:1138-1150).
@@ -622,6 +680,9 @@ pub fn render_text(rep: &CheckReport) -> String {
     s.push_str(&line("integrality", &rep.summary.integrality));
     if let Some(k) = &rep.summary.general_constraints {
         s.push_str(&line("general", k));
+    }
+    if let Some(k) = &rep.summary.cp {
+        s.push_str(&line("cp", k));
     }
     if let Some(q) = &rep.qp {
         s.push_str(&format!(

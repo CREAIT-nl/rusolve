@@ -1,0 +1,9 @@
+{
+  "id": "class_cp_scheduling",
+  "title": "Three-job, two-machine shop with native intervals",
+  "kind": "model",
+  "modes": [
+    "python"
+  ],
+  "prompt": "A workshop has two machines, M1 and M2, and three jobs A, B and C. Every job needs one operation on M1 and then one on M2, in that order: the M2 operation starts only after the M1 operation of the same job has ended. Durations (whole time units): job A takes 2 on M1 and 3 on M2; job B takes 3 on M1 and 1 on M2; job C takes 2 on M1 and 2 on M2. A machine does one operation at a time. Minimise the makespan (the time at which the last operation ends); everything starts at time 0 or later, in whole time units.\nState the machine rule with rusolve's native scheduling objects (intervals and no-overlap), not with big-M rows. Name the variables `sA1`, `sA2`, `sB1`, `sB2`, `sC1`, `sC2` (the start of each job's operation on M1 or M2) and `cmax` (the makespan).\n\nReport values at the full precision the solver returns.\n\nEnd your final message with one line of the form\nANSWER: {\"status\": \"<solution status string>\", \"objective\": <number>, \"plan\": {\"<variable name>\": <value>, ...}}\nwhere `plan` lists every variable named above by exactly the name given (zeros may be left out), and `status` is \"Optimal\" when the solver proves optimality."
+}

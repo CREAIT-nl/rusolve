@@ -1,8 +1,8 @@
 [workspace]
 resolver = "2"
-members = ["crates/rusolve-core", "crates/rusolve-io", "crates/rusolve-lp", "crates/rusolve-mip", "crates/rusolve-cli", "crates/rusolve-ekk", "crates/rusolve-py", "crates/rusolve-wasm", "crates/rusolve-model"]
-# rusolve-py needs a Python interpreter to build: only `-p rusolve-py` or maturin builds it
-default-members = ["crates/rusolve-core", "crates/rusolve-io", "crates/rusolve-lp", "crates/rusolve-mip", "crates/rusolve-cli", "crates/rusolve-ekk", "crates/rusolve-wasm", "crates/rusolve-model"]
+members = ["crates/rusolve-core", "crates/rusolve-io", "crates/rusolve-lp", "crates/rusolve-mip", "crates/rusolve-cli", "crates/rusolve-ekk", "crates/rusolve-py", "crates/rusolve-wasm", "crates/rusolve-model", "crates/rusolve-cpsat"]
+# rusolve-py needs a Python interpreter to build: only `-p rusolve-py` or maturin builds it;
+default-members = ["crates/rusolve-core", "crates/rusolve-io", "crates/rusolve-lp", "crates/rusolve-mip", "crates/rusolve-cli", "crates/rusolve-ekk", "crates/rusolve-wasm", "crates/rusolve-model", "crates/rusolve-cpsat"]
 
 [workspace.package]
 version = "0.1.0"
@@ -18,6 +18,7 @@ rusolve-mip = { path = "crates/rusolve-mip" }
 rusolve-ekk = { path = "crates/rusolve-ekk" }
 rusolve-wasm = { path = "crates/rusolve-wasm" }
 rusolve-model = { path = "crates/rusolve-model" }
+rusolve-cpsat = { path = "crates/rusolve-cpsat" }
 criterion = "0.8"
 
 # Shipped binaries: build with `--profile dist` (fat LTO, one codegen unit).

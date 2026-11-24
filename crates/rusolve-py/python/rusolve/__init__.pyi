@@ -19,6 +19,7 @@ from ._rusolve import HighsSolution as HighsSolution
 from ._rusolve import HighsSparseMatrix as HighsSparseMatrix
 from ._rusolve import HighsStatus as HighsStatus
 from ._rusolve import HighsVarType as HighsVarType
+from ._rusolve import Interval as Interval
 from ._rusolve import LinExpr as LinExpr
 from ._rusolve import MatrixFormat as MatrixFormat
 from ._rusolve import Model as Model
@@ -28,6 +29,7 @@ from ._rusolve import Var as Var
 from ._rusolve import Vars as Vars
 from ._rusolve import kHighsIInf as kHighsIInf
 from ._rusolve import kHighsInf as kHighsInf
+from ._rusolve import cpsat_info as cpsat_info
 from ._rusolve import quicksum as quicksum
 
 inf: float

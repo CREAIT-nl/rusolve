@@ -76,5 +76,12 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+      # the class_cp_scheduling grader builds its reference with the Python package (RSV_PY)
+      - name: build the Python package for the graders
+        run: |
+          python -m venv .venv
+          . .venv/bin/activate
+          pip install maturin
+          maturin develop --release -m crates/rusolve-py/Cargo.toml
       - name: tools/agent_ci.sh
-        run: tools/agent_ci.sh
+        run: RSV_PY="$PWD/.venv/bin/python" tools/agent_ci.sh

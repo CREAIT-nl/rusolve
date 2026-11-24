@@ -238,7 +238,8 @@ SKILL_EVAL_KIND = {"solve": "solve", "debug-infeasible": "debug", "tune": "tune"
                     "start-here": "class-router", "assignment-transport-flow": "class-flow",
                     "set-cover-packing": "class-cover", "scheduling": "class-scheduling",
                     "lot-sizing": "class-lotsizing", "facility-location": "class-facility",
-                    "routing": "class-routing", "piecewise-semi": "class-pwl-semi", "convex-qp": "class-qp"}
+                    "routing": "class-routing", "piecewise-semi": "class-pwl-semi", "convex-qp": "class-qp",
+                    "conic": "class-conic"}
 
 
 def skill_audience(skill):

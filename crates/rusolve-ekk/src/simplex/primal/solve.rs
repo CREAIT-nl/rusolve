@@ -326,6 +326,7 @@ impl HEkkPrimal {
             ekk.info_.simplex_strategy = kSimplexStrategyDualPlain;
             let mut dual_solver = HEkkDual::new(ekk);
             let call_status = dual_solver.solve(ekk, true);
+            dual_solver.recycle(ekk);
             // Restore any bound perturbation
             ekk.info_.dual_simplex_cost_perturbation_multiplier =
                 save_dual_simplex_cost_perturbation_multiplier;

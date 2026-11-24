@@ -30,6 +30,10 @@ pub trait LazyConstraints {
     /// Rows `a x <= rhs` that every feasible solution satisfies; return the ones `solution`
     /// violates (rows it satisfies are ignored). An empty list accepts the solution.
     fn lazy_constraints(&mut self, solution: &[f64]) -> Vec<UserCut>;
+
+    /// Called after rows were added and before the next solve; the oracle may set a start
+    /// solution or an option. Does nothing by default.
+    fn before_resolve(&mut self, _highs: &mut Highs) {}
 }
 
 impl<F: FnMut(&[f64]) -> Vec<UserCut>> LazyConstraints for F {
@@ -49,6 +53,9 @@ pub struct LazyReport {
     pub rows_rejected_malformed: usize,
     /// Rows the candidate solution already satisfied (ignored).
     pub rows_not_violated: usize,
+    /// Branch-and-bound nodes summed over every solve (the final solve's count alone is in
+    /// `info_`).
+    pub mip_nodes: i64,
     /// True when the oracle accepted the last solution; false at the round limit or when a
     /// solve did not end optimal.
     pub accepted: bool,
@@ -64,11 +71,28 @@ impl Highs {
         lazy: &mut dyn LazyConstraints,
         max_rounds: usize,
     ) -> (HighsStatus, LazyReport) {
+        self.run_with_lazy_constraints_until(lazy, max_rounds, None)
+    }
+
+    /// [`Self::run_with_lazy_constraints`] with one wall-clock budget for all rounds: before each
+    /// solve the `time_limit` option is set to what is left of `deadline` (a caller that wants a
+    /// total time limit across rounds, as the outer-approximation engine does).
+    pub fn run_with_lazy_constraints_until(
+        &mut self,
+        lazy: &mut dyn LazyConstraints,
+        max_rounds: usize,
+        deadline: Option<std::time::Instant>,
+    ) -> (HighsStatus, LazyReport) {
         let mut rep = LazyReport::default();
         let mut status = HighsStatus::kOk;
         while rep.rounds < max_rounds {
+            if let Some(d) = deadline {
+                let left = d.saturating_duration_since(std::time::Instant::now());
+                self.options_.time_limit = left.as_secs_f64();
+            }
             status = self.run();
             rep.rounds += 1;
+            rep.mip_nodes += self.info_.mip_node_count;
             if self.get_model_status() != HighsModelStatus::kOptimal {
                 return (status, rep);
             }
@@ -112,6 +136,9 @@ impl Highs {
                 added += 1;
             }
             rep.rows_added += added;
+            if added > 0 {
+                lazy.before_resolve(self);
+            }
             if added == 0 {
                 // Only an empty answer, or one whose rows are all well-formed and already
                 // satisfied, accepts. A non-empty answer made only of malformed rows is an oracle

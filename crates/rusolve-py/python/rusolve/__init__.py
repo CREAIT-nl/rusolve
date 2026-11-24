@@ -18,4 +18,22 @@ from . import errors
 
 inf = float("inf")
 
+
+def _tell_loader_where_ortools_is() -> None:
+    """`mip_engine="cpsat"` loads OR-Tools at run time. Inside Python the loader cannot guess the
+    environment from the executable, so hand it the `ortools` package found next to this one (if
+    any). This only finds the package; the library is not loaded until a solve selects CP-SAT."""
+    try:
+        import importlib.util
+        import os
+
+        spec = importlib.util.find_spec("ortools")
+        if spec is not None and spec.origin:
+            _rusolve._set_ortools_dir(os.path.dirname(spec.origin))
+    except Exception:  # a broken environment must not break `import rusolve`
+        pass
+
+
+_tell_loader_where_ortools_is()
+
 __all__ = [n for n in dir(_rusolve) if not n.startswith("_")] + list(errors.__all__) + ["errors", "inf"]

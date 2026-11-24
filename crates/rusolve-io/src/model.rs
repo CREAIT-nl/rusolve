@@ -103,6 +103,10 @@ pub struct Model {
     /// Empty for every LP/MIP/QP model. The legacy readers reject a model where it is not empty
     /// (the LP/MIP code never sees a dropped constraint); `read_mps_conic` / `read_lp_conic` keep it.
     pub conic: crate::conic::ConicBlock,
+    /// Scheduling and combinatorial objects (intervals, no-overlap, cumulative, all-different,
+    /// element, table), as the user stated them. No file format carries them (they come from
+    /// the Python API and the MCP `build_model` tool); empty for every model the readers build.
+    pub cp: crate::cp::CpModel,
 }
 
 /// `HessianFormat::kSquare` (`model/HighsHessian.h`), the format of every

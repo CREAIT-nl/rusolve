@@ -41,6 +41,7 @@ Source: `rusolve --help --json`, the command registry that also drives `--help` 
 | `ranging` | `usage: rusolve ranging <model> [flags]` | sensitivity ranging of an LP optimum, by row and column name | `rusolve.ranging/1` |
 | `solve` | `usage: rusolve solve <model> [flags]` | solve an LP (HiGHS-port simplex by default; --legacy-lp / --ipm for the native engines) | `rusolve.result/1` |
 | `tune` | `usage: rusolve tune <instances> [flags]` | race option candidates on an instance family and write the winning profile | `rusolve.tune/1` |
+| `version` | `usage: rusolve version [flags]` | print the solver version and whether the CP-SAT engine's OR-Tools library is installed (no solve) |  |
 
 ### `rusolve check` flags
 
@@ -286,13 +287,19 @@ Source: `rusolve --help --json`, the command registry that also drives `--help` 
 | `--name` | NAME |  |  | name recorded in the tuned profile |
 | `--space` |  |  |  | print the options a race mutates and their values as JSON, then exit (no instances) |
 
+### `rusolve version` flags
+
+| flag | value | default | choices | description |
+|---|---|---|---|---|
+| `--format` | text\|json | text | text, json | output format |
+
 ## MCP tools (`rusolve mcp`, stdio)
 
 Config: `{"mcpServers": {"rusolve": {"command": "/path/to/rusolve-cli", "args": ["mcp"]}}}`. Every tool but `load_model` takes the `model_id` that `load_model` returns. Details: docs/design/mcp.md.
 
 ### `load_model`
 
-Load a model and return a model_id handle with its size, name summary, class and engine. Every other tool takes the model_id. Give exactly one of path, mps_text, lp_text (CPLEX LP format) or mof_text (MathOptFormat JSON). LP and MIP models get the full tool set. Convex QP, SOCP/QCQP and general-constraint models (indicator, SOS, piecewise-linear, min/max/abs/and/or, semi-continuous) are routed to their engine and support solve, get_solution and free_model. A class nothing solves (nonconvex, MIQP, mixed-integer conic) is refused with the class and the reason.
+Load a model and return a model_id handle with its size, name summary, class and engine. Every other tool takes the model_id. Give exactly one of path, mps_text, lp_text (CPLEX LP format) or mof_text (MathOptFormat JSON). LP and MIP models get the full tool set. Convex QP, SOCP/QCQP and general-constraint models (indicator, SOS, piecewise-linear, min/max/abs/and/or, semi-continuous) are routed to their engine and support solve, get_solution and free_model. Convex MIQP and mixed-integer conic models load too, but solve runs their experimental outer-approximation engine only with options {"miqp_oa": true} or {"misocp_oa": true} (off by default: slower), and otherwise refuses with that hint. A class nothing solves (nonconvex Q, nonconvex quadratic rows, general constraints with quadratic terms) is refused with the class and the reason.
 
 | parameter | type | required | description |
 |---|---|---|---|
@@ -303,10 +310,11 @@ Load a model and return a model_id handle with its size, name summary, class and
 
 ### `build_model`
 
-Build an LP/MIP from JSON, no file needed, and return a model_id like load_model. variables: [{name, type? continuous\|integer\|binary, lower?, upper?, objective?}] (bounds default 0 and infinity, null is infinite). rows: [{name, terms: {variable: coefficient}, then either sense (<=, >=, =) with rhs, or lower and/or upper}]. objective: {terms?: {variable: coefficient}, offset?} adds to the per-variable objective. sense is minimize (default) or maximize. A bad entry is an error naming its JSON path, for example rows[2].terms.z. For a quadratic or general-constraint model write LP text and use load_model.
+Build an LP/MIP from JSON, no file needed, and return a model_id like load_model. An optional cp section adds scheduling and combinatorial objects (class cp): intervals [{name, start, size, end, presence?}], no_overlap [{name, intervals}], cumulative [{name, intervals, demands, capacity}], all_different [{name, variables}], element [{name, index, values, target}], table [{name, variables, tuples, negated?}]. Every variable a cp object names (start, end, presence, index, target, variables) must be declared in variables, type integer (binary for presence), with both bounds finite: upper defaults to infinity, so write it. An interval does not create its end: declare the end variable and name it; start, size and end are all required (only presence is optional). size, demands, values and capacity take an integer (a JSON number without a fraction, so 3 not 3.0) or a variable name; a size or demand must be nonnegative. no_overlap and cumulative name intervals by their interval name, not by variable. The reply is the handle summary; its model_id is in structuredContent and in the JSON text of content[0].text. solve checks the answer on these objects (envelope cp.verified); modify, explain, lint, ranging and feasrelax refuse such a model (RS4012). variables: [{name, type? continuous\|integer\|binary, lower?, upper?, objective?}] (bounds default 0 and infinity, null is infinite). rows: [{name, terms: {variable: coefficient}, then either sense (<=, >=, =) with rhs, or lower and/or upper}]. objective: {terms?: {variable: coefficient}, offset?} adds to the per-variable objective. sense is minimize (default) or maximize. A bad entry is an error naming its JSON path, for example rows[2].terms.z. For a quadratic or general-constraint model write LP text and use load_model.
 
 | parameter | type | required | description |
 |---|---|---|---|
+| `cp` | object |  | Scheduling and combinatorial objects. Every variable they name must be declared in variables as an integer (binary for presence) with finite lower and upper bounds. Variables and intervals are named by string. |
 | `name` | string |  | Model name (no whitespace). |
 | `objective` | object |  |  |
 | `rows` | array |  |  |
@@ -315,7 +323,7 @@ Build an LP/MIP from JSON, no file needed, and return a model_id like load_model
 
 ### `solve`
 
-Solve the model handle (progress notifications with a progressToken, notifications/cancelled stops it) and return the rusolve.result/1 envelope (status, objective, dual bound, gap, stats.lp_iterations, run settings). After modify an LP re-solves from the kept basis (warm); set warm_start false to force a cold solve. Option values persist on the handle. With wasm_hook, a fuel-metered WebAssembly component scores branching and cuts and picks open nodes for this solve only; its counters appear as stats.wasm.
+Solve the model handle (progress notifications with a progressToken, notifications/cancelled stops it) and return the rusolve.result/1 envelope (status, objective, dual bound, gap, stats.lp_iterations, run settings). After modify an LP re-solves from the kept basis (warm); set warm_start false to force a cold solve. Option values persist on the handle. On a convex MIQP or mixed-integer conic handle, options takes only {"miqp_oa": true} or {"misocp_oa": true} (experimental, off by default). With wasm_hook, a fuel-metered WebAssembly component scores branching and cuts and picks open nodes for this solve only; its counters appear as stats.wasm. options {"mip_engine": "cpsat"} solves an all-integer model, with or without CP objects, with OR-Tools CP-SAT when its library is installed (`rusolve version --format json` shows cpsat.available; a missing library is RS0012 naming the install routes); the answer is checked on your model and objects, and the envelope has a cpsat object.
 
 | parameter | type | required | description |
 |---|---|---|---|
@@ -417,7 +425,7 @@ Release a model handle and its solver state.
 
 ## Options
 
-318 options from `rusolve options --json` (the HiGHS option registry; set them with `--opt key=value`, `--options-file`, or the MCP `solve` tool's `options` map). `affects` says whether an option can change the search (`search`), only a tolerance (`tolerance`), only runtime behaviour (`runtime`) or only output (`output`). Run `rusolve options --json --non-default` to see what a run changed.
+342 options from `rusolve options --json` (the HiGHS option registry; set them with `--opt key=value`, `--options-file`, or the MCP `solve` tool's `options` map). `affects` says whether an option can change the search (`search`), only a tolerance (`tolerance`), only runtime behaviour (`runtime`) or only output (`output`). Run `rusolve options --json --non-default` to see what a run changed.
 
 | option | type | default | range | affects | tunable | description |
 |---|---|---|---|---|---|---|
@@ -570,6 +578,8 @@ Release a model handle and its solver state.
 | `mip_cdcl_uip` | bool | false |  | search | yes | Default-off lever. CDCL dive on a first-UIP, two-watched-literal engine, pure-binary models |
 | `mip_cdouble_act_contrib` | bool | false |  | search | yes | Ported behind this default-off lever: HiGHS #3184, Upgrade activity contributions to HighsCDouble |
 | `mip_cdouble_proofs` | bool | false |  | search | yes | Ported behind this default-off lever: HiGHS #3223, Fix traininstance6 bug (closes #2874) |
+| `mip_child_selection` | HighsInt | 8 | [-1, 8] | search | yes | Default 8. Main-search dive child rule: 0 up, 1 down, 2 root solution, 3 objective, 4 random, 5 best cost, 6 worst cost, 7 disjunction, 8 hybrid (HiGHS sub-MIP rule); -1 = HiGHS |
+| `mip_child_selection_switch_gap` | double | 0.02 | [0.0, inf] | search | yes | Default 0.02. With mip_child_selection set: use the HiGHS root-solution child rule once the relative gap is at or below this value; 0 = never switch |
 | `mip_clique_normalise` | bool | false |  | search | yes | Ported behind this default-off lever: HiGHS #3286, Enhance clique extraction (clique-row normalisation) |
 | `mip_coef_change_impl_bounds` | bool | false |  | search | yes | Ported behind this default-off lever: HiGHS #3318, implied-bound bookkeeping on coefficient change (matrixNonZeroChanged, link/unlink/addToMatrix) |
 | `mip_conflict_off_mask` | HighsInt | 0 | [0, 63] | search |  | Ablation lever. Bits: 1 tree and untagged (strong branching, sub-MIPs), 2 heur, 4/8 inf/bound-LP pool part only, 16 degen, 32 cut-pool cuts incl. heur calls |
@@ -586,6 +596,7 @@ Release a model handle and its solver state.
 | `mip_dual_fix_probing` | bool | false |  | search | yes | Ported behind this default-off lever: HiGHS #3244, Dual fixing inside probing |
 | `mip_dual_side_lost` | bool | false |  | search | yes | Ported behind this default-off lever: HiGHS #3332, Reset row-dual implied bounds when the dual side is lost |
 | `mip_dual_subst_limits` | bool | false |  | search | yes | Ported behind this default-off lever: HiGHS #3404, Early stop for dual substitution, row size limit |
+| `mip_engine` | string | highs |  | search |  | Engine for a MIP: "highs" (the port) or "cpsat" (Google OR-Tools CP-SAT; needs a build with the cpsat feature, every column integer with finite bounds and integral rows) |
 | `mip_feasibility_tolerance` | double | 1e-06 | [1e-10, inf] | tolerance | yes | MIP integrality tolerance |
 | `mip_first_inc` | bool | false |  | search | yes | Default-off lever. Without an incumbent after the pre-root Feasibility Jump, run the native FJ and then the FPR and Local-MIP presolve heuristics before the root LP |
 | `mip_first_inc_root` | bool | false |  | search | yes | Default-off lever. Without an incumbent after the first root LP and its rounding heuristics (before the cut loop), run the native FJ and then the FPR and Local-MIP presolve heuristics |
@@ -619,6 +630,8 @@ Release a model handle and its solver state.
 | `mip_lifting_for_probing` | HighsInt | -1 | [-1, 2147483647] | search | yes | Level of lifting for probing that is used |
 | `mip_local_branching` | bool | false |  | search | yes | Default-off lever. Local branching (Fischetti-Lodi 2003): sub-MIP with the original objective inside a Hamming ball around the incumbent, radius adapted on the outcome |
 | `mip_lp_age_limit` | HighsInt | 10 | [0, 32767] | search | yes | Maximal age of dynamic LP rows before they are removed from the LP relaxation in the MIP solver |
+| `mip_lp_keep_dse_weights` | HighsInt | 0 | [0, 2] | search | yes | MIP LP relaxations keep dual steepest-edge weights across basis restores and cut changes: 0 off, 1 from the last solve, 2 also stored with each search basis; default-off lever |
+| `mip_lp_skip_refactor_check` | bool | false |  | search | yes | MIP and sub-MIP LP relaxations skip the factor accuracy test on a simplex rebuild (rebuild_refactor_solution_error_tolerance = 0); default-off lever |
 | `mip_lp_solver` | string | choose |  | search | yes | MIP LP solver: "choose", "simplex", "ipm", "ipx" or "hipo" |
 | `mip_ls_gub_swap` | bool | false |  | search | yes | Flag. GUB swap / ejection-chain moves in Local-MIP (Benoist et al. 2011); acts only with mip_heuristic_run_local_mip; default-off lever |
 | `mip_ls_int_lp_repair` | bool | false |  | search | yes | Flag. Fix the integers of local-search end points and solve an LP over the rest to repair them; default-off lever |
@@ -638,15 +651,27 @@ Release a model handle and its solver state.
 | `mip_node_bigm_active` | double | 0.0 | [0.0, 1000000000.0] | search | yes | With mip_node_bigm, only tighten rows whose slack in the previous LP solution is at most this multiple of \|c_z\|; 0 = all rows |
 | `mip_node_bigm_min_ratio` | double | 0.001 | [0.0, 1.0] | search | yes | With mip_node_bigm, smallest coefficient reduction d relative to \|c_z\| worth applying |
 | `mip_node_bigm_rows` | bool | false |  | search | yes | Default-off lever. With mip_node_bigm, add the tightened big-M row as a node-local LP row instead of changing the coefficient in place, so the basis survives |
+| `mip_node_install_basis` | bool | false |  | search | yes | A node taken from the queue starts its LP from its parent's stored basis, cut rows matched by identity (SCIP restores the LP state of the node's fork); default-off lever |
+| `mip_node_rounding` | HighsInt | 0 | [0, 1000000] | search | yes | Every k-th dive node, round its LP solution (lock rounding, activity-aware rounding, shifting repair; no LP solve) and try it as an incumbent; 0 = off (HiGHS); default-off lever |
+| `mip_node_rounding_polish` | bool | false |  | search | yes | With mip_node_rounding, improve each found point by 1-opt (single columns moved toward a lower objective, rows kept feasible) before trying it; default-off lever |
+| `mip_node_sepa_freq` | HighsInt | 1 | [1, 1000000] | search | yes | Separate cuts at a tree node only if its depth is a multiple of this, as SCIP's separator freq; 1 = every node (HiGHS) |
+| `mip_node_sepa_max_rounds` | HighsInt | 0 | [0, 1000000] | search | yes | At most this many cut separation rounds at a tree node, as SCIP's separating/maxrounds; 0 = no limit (HiGHS) |
+| `mip_node_sepa_maxbounddist` | double | 1.0 | [0.0, 1.0] | search | yes | Separate cuts at a tree node only if (node bound - global bound) <= this fraction of (cutoff - global bound), as SCIP's separator maxbounddist; 1 = every node (HiGHS) |
+| `mip_node_sepa_pool_only` | bool | false |  | search | yes | At tree nodes that mip_node_sepa_maxbounddist or mip_node_sepa_freq exclude, still add violated cut-pool cuts (no separators run); default-off lever |
 | `mip_orbitope_full_fix` | bool | false |  | search | yes | Default-off lever. At the root, apply lexicographic orbitopal fixing (Kaibel-Peinhardt-Pfetsch 2011) over all rows of every non-packing full orbitope |
 | `mip_orbitope_root_fix` | bool | true |  | search | yes | Flag. Fix the staircase of packing orbitopes at the root after the first fractional LP (when large enough); disjoint dynamic symmetries stay |
 | `mip_path_same_bds` | bool | false |  | search | yes | Ported behind this default-off lever: HiGHS #3179, Same bound types in path-mixing transform |
+| `mip_plunge_bestbound_freq` | HighsInt | 0 | [0, 2147483647] | search | yes | Default 0 (HiGHS, 10). Under mip_plunge_gap: take the best-bound queue node every this many queue picks |
+| `mip_plunge_gap` | double | 0.0 | [0.0, inf] | search | yes | Default 0 (off). The mip_plunge_* levers act once the relative gap between the global lower bound and the upper limit is at or below this value (main search only) |
+| `mip_plunge_max_nodes` | HighsInt | 0 | [0, 2147483647] | search | yes | Default 0 (HiGHS, 100). Under mip_plunge_gap: node limit of one plunge |
+| `mip_plunge_quot` | double | 0.0 | [0.0, inf] | search | yes | Default 0 (off). Under mip_plunge_gap: plunge only into nodes whose lower bound is at most lb + quot * (cutoff - lb); others go to the queue |
 | `mip_pool_age_limit` | HighsInt | 30 | [0, 1000] | search | yes | Maximal age of rows in the MIP solver cutpool before they are deleted |
 | `mip_pool_soft_limit` | HighsInt | 10000 | [1, 2147483647] | search | yes | Soft limit on the number of rows in the MIP solver cutpool for dynamic age adjustment |
 | `mip_presolve_clique_table` | bool | false |  | search | yes | Ported behind this default-off lever: HiGHS #3312, Clique table through presolve |
 | `mip_presolve_clique_varbound` | bool | false |  | search | yes | Default-off lever. Presolve merges variable-bound rows z + a_j x_j >= L whose binaries lie in one clique into a single row (Achterberg et al. 2020) |
 | `mip_presolve_domcol_full` | bool | false |  | search | yes | Default-off lever. Dominated-column presolve never switches off its predictive bound analysis (HiGHS stops it after a check budget) |
 | `mip_presolve_eq_subst` | bool | false |  | search | yes | Default-off lever. Presolve substitutes a unit-coefficient integer column out of a short integer equation and adds its non-implied bounds as one row |
+| `mip_presolve_exact_strengthen` | bool | false |  | search | yes | Flag. Presolve coefficient strengthening writes the new coefficient exactly, not via a rounded delta that cancels on a big-M and can cut off the optimum; on in recommended; lever |
 | `mip_presolve_probing_cap` | bool | false |  | search | yes | Default-off lever. MIP presolve stops probing after 10000 probed binaries instead of the HiGHS contingent |
 | `mip_presolve_probing_useless` | HighsInt | 0 | [0, 2147483647] | search | yes | Presolve probing stops after this many successive probes with no deletion and no new clique (SCIP probing maxuseless); 0 = off; default-off lever |
 | `mip_presolve_row_append` | bool | false |  | search | yes | Ported behind this default-off lever: HiGHS #3218, FMPresolve5-peripheral (row/col append infrastructure) |
@@ -671,7 +696,7 @@ Release a model handle and its solver state.
 | `mip_search_simulate_concurrency` | bool | false |  | search | yes | Simulate MIP search concurrency on a single thread |
 | `mip_shift_and_propagate` | bool | false |  | search | yes | Default-off lever. Pre-root Shift-and-Propagate primal heuristic, only without an incumbent |
 | `mip_skip_analytic_centre` | bool | false |  | search | yes | Skip the analytic centre IPM solve at the MIP root (Gondzio 1996 centre; HiGHS runs it on a spare thread); frees the single-thread root of huge models; default-off lever |
-| `mip_strengthen_cover_guard` | bool | false |  | search | yes | Flag. Exit the 1.16.0 strengthenInequalities cover loop when slackupper < 0 (HiGHS asserts it), where it can loop forever; on in recommended; lever |
+| `mip_strengthen_cover_guard` | bool | false |  | search | yes | Flag. Exit the 1.16.0 strengthenInequalities cover loop when slackupper < 0 (HiGHS asserts it) or the step is not positive, where it can loop forever; on in recommended; lever |
 | `mip_strengthen_small_contrib` | bool | false |  | search | yes | Ported behind this default-off lever: HiGHS #3468, Small contributions in strengthenInequalities |
 | `mip_sym_hash64` | bool | false |  | search | yes | Ported behind this default-off lever: HiGHS #3535, add-symmetry-timelimit (u64 vertex hashes, detection time limit) |
 | `mip_symmetry_dynamic` | bool | false |  | search | yes | SCIP 11.0.0 dynamic symmetry handling (orbitopal reduction + LexRed, propagating/symmetry/usedynamicprop) behind this default-off lever |
@@ -680,6 +705,13 @@ Release a model handle and its solver state.
 | `mip_ti_list_sched` | bool | true |  | search | yes | Time-indexed scheduling primal heuristic: LP alpha-point list scheduling with hill climb (Kolisch 1996; Hall et al. 1997); first incumbent for time-indexed job shop |
 | `mip_ti_precedence_sepa` | bool | true |  | search | yes | Disaggregated (step) precedence cuts from aggregated sum-t-x precedence rows over exactly-one start-time sets (Sousa and Wolsey 1992); time-indexed job shop root bound |
 | `mip_zero_obj_cdcl` | bool | true |  | search | yes | Flag. All-zero objective: CDCL feasibility search at the root |
+| `miqp_oa` | bool | false |  | search |  | Solve a convex MIQP by LP-based outer approximation (epigraph, root tangent, tree gradient cuts, exactness loop); default-off lever, off keeps the typed refusal |
+| `miqp_oa_disaggregate` | bool | false |  | search |  | With miqp_oa, one epigraph column per connected block of Q instead of one for the whole objective; default-off lever |
+| `miqp_oa_lazy_only` | bool | false |  | search |  | With miqp_oa, cut only at the root and at candidate incumbents, not at tree LP points (keeps presolve on); default-off lever |
+| `misocp_oa` | bool | false |  | search |  | Solve a mixed-integer SOCP / convex MIQCQP by LP outer approximation (cone gradient cuts, root SOCP, fixed-integer polish, checker-confirmed answer); default-off lever, off keeps the typed refusal |
+| `misocp_oa_disaggregate` | bool | false |  | search |  | With misocp_oa, write each second-order cone in the disaggregated extended formulation (one 3-column cone per component); default-off lever |
+| `misocp_oa_lazy_only` | bool | false |  | search |  | With misocp_oa, cut only at the root and at candidate incumbents, not at tree LP points (keeps presolve on); default-off lever |
+| `misocp_oa_no_polish` | bool | false |  | search |  | With misocp_oa, do not solve the continuous SOCP at fixed integers for each candidate (measures the polish); default-off lever |
 | `no_unnecessary_rebuild_refactor` | bool | true |  | search | yes | No unnecessary refactorization on simplex rebuild |
 | `objective_bound` | double | inf | [-inf, inf] | search | yes | Objective bound for termination of the dual simplex solver |
 | `objective_target` | double | -inf | [-inf, inf] | search | yes | Objective target for termination of the MIP solver |
@@ -742,7 +774,7 @@ Release a model handle and its solver state.
 
 ## Environment variables
 
-143 variables from `rusolve env --json`. Only `lever` and `profile` variables are for users: `harness` and `debug` ones exist for benchmarking and tracing. Prefer an option over a variable. An unregistered `RUSOLVE_*` name makes the CLI exit 2 with the nearest registered name.
+148 variables from `rusolve env --json`. Only `lever` and `profile` variables are for users: `harness` and `debug` ones exist for benchmarking and tracing. Prefer an option over a variable. An unregistered `RUSOLVE_*` name makes the CLI exit 2 with the nearest registered name.
 
 | variable | kind | scope | values | what it does |
 |---|---|---|---|---|
@@ -815,6 +847,8 @@ Release a model handle and its solver state.
 | `RUSOLVE_HIGHS_FIXTURES` | harness | ekk | a directory path | Extra directory searched first for target-only oracle fixtures (generated by tools/highs-oracle), before `target/highs-fixtures`. |
 | `RUSOLVE_HIPO_PROF` | debug | ekk | unset = off, anything else = on | Times every HiPO BLAS call and the dense-factor phases (summed thread seconds and call counts) and prints the table in the HiPO summary. |
 | `RUSOLVE_HIPO_TRACE` | debug | ekk | a file path | Port HiPO interior-point code: truncates and appends its oracle-trace lines to that file, for the C++/Rust trace diff. |
+| `RUSOLVE_INSTALL_BASE_URL` | harness | any | a base URL the release archives are downloaded from | Installer only: where install.sh downloads from. The solver ignores it; it is registered because the installer's children inherit it and unknown RUSOLVE_* names are rejected. |
+| `RUSOLVE_INSTALL_MARKETPLACE` | harness | any | a GitHub owner/repo, a git URL or a local path | Installer only: the plugin marketplace install.sh adds for the rusolve skills (default CREAIT-nl/rusolve). The solver ignores it; it is registered because the installer's children inherit it and unknown RUSOLVE_* names are rejected. |
 | `RUSOLVE_IPM` | lever | legacy_lp | 0 = off, anything else = on | Routes `rusolve solve` to the interior-point LP instead of the simplex (the same thing `--ipm` does). |
 | `RUSOLVE_IPM_ADAPT` | lever | legacy_lp | a factor, 0 = off (default 1) | Raises rho and delta when a factorization hits Theta-cancellation pivots in the legacy IPM. |
 | `RUSOLVE_IPM_DELTA` | lever | legacy_lp | a number (default DELTA_DEFAULT) | Dual regularization delta (M += delta*I) of the legacy IPM. |
@@ -839,10 +873,12 @@ Release a model handle and its solver state.
 | `RUSOLVE_MIP_EKK` | lever | native_mip | 0 = off, anything else = on | Native MIP: uses the ported HiGHS simplex (ekk) as the node LP engine instead of the rusolve engine. |
 | `RUSOLVE_MIP_HIGHS` | lever | port_mip | 0 = native search, anything else or unset = HiGHS port | `rusolve mip` runs the rusolve-ekk HiGHS MIP port by default (the envelope, `--opt` and the documented exit codes exist only on that path); `0` selects the native rusolve-mip search. |
 | `RUSOLVE_MIP_LOG` | debug | native_mip | set = on | Native MIP: prints presolve, cut-round, restart, clique and branching-tree progress lines to stderr. |
+| `RUSOLVE_NODE_ROUNDING_DRY` | debug | ekk | set to exactly 1 | Port MIP, with mip_node_rounding on: count and log to stderr the improving points the node rounding finds without adding them, so the search is the one without it. |
 | `RUSOLVE_NO_P1REPERT` | lever | legacy_lp | set = on (lever back) | Turns off phase-1 re-perturbation, which by default re-perturbs a frozen epsilon across a stall window. |
 | `RUSOLVE_NO_P2PERT` | lever | legacy_lp | set = on (lever back) | Turns off phase-2 entering-tie perturbation, which by default engages after 4x the Bland stall threshold. |
 | `RUSOLVE_NO_RELAXED` | lever | legacy_lp | set = on (disables the escape) | Suppresses the phase-1 escape into relaxed row choice after a long frozen-and-stagnant stall. |
 | `RUSOLVE_NO_SH` | lever | legacy_lp | set = on (lever back) | Turns off SH (strong-Harris) pricing, falling back to Dantzig pricing in the legacy simplex. |
+| `RUSOLVE_ORTOOLS_LIB` | lever | port_mip | path of the OR-Tools shared library file (libortools.so.9, libortools.9.dylib, ortools.dll) | Where `mip_engine=cpsat` loads OR-Tools CP-SAT from. First step of the search order (`crates/rusolve-cpsat/src/runtime.rs`, docs/design/cpsat-engine.md); when set, no other place is tried. Unset: the install prefix, the `ortools` Python package, then the system loader. Only read when the engine is selected, so the default search does not depend on it. |
 | `RUSOLVE_P1PROBE` | lever | legacy_lp | set = on | Legacy phase 1: every 20,000 stalled pivots at a frozen vertex, probes whether any improver column has a strictly positive ratio. Read only by the legacy engine, so setting it also selects that engine (`use_ekk_engine`). |
 | `RUSOLVE_P1TRACE` | lever | legacy_lp | set = on | Legacy phase 1: collects and prints the phase-1 trace (w probe and stall census) for the artificial phase. Read only by the legacy engine, so setting it also selects that engine (`use_ekk_engine`). |
 | `RUSOLVE_P1_ROUTE_DUAL` | lever | legacy_lp | set = on | Policy arm: with RUSOLVE_PRIMAL=1, cold primal-infeasible starts go to the dual engine instead of paying an artificial-basis phase 1. |
@@ -884,6 +920,7 @@ Release a model handle and its solver state.
 | `RUSOLVE_STD_LIBSTDCXX` | lever | port_mip | 1 = libstdc++ tie order, anything else or unset = libc++ | Port MIP: the C++ heap operations (priority_queue, make/pop/sort_heap, partial_sort) break ties as libstdc++ does (the Linux highspy wheel) instead of libc++ (the macOS oracle the identity references come from). Only heap operations switch (not HighsMultiBuckets order, the pdqsort heap fallback, IPX RandomPermute, or FMA contraction), so it is not a general bit-exact oracle. Diagnostic, default off. |
 | `RUSOLVE_SUBMIP_LOG` | debug | native_mip | set = on | Native MIP: prints the root sub-MIP's progress lines to stderr. |
 | `RUSOLVE_TEST_PROFILE` | harness | ekk | `default`, `recommended` or `all-h16` | Base HighsOptions the port's replay test builders start from, before the oracle records override what they carry. |
+| `RUSOLVE_TREE_TRACE` | debug | ekk | set to exactly 1 | Port MIP main search: print one line per dive (TD), evaluated node (TN), queue pick (TQ) and restart (TR) to stderr. Reporting only; the search is unchanged. |
 | `RUSOLVE_VUBEQ_FUZZ_DUMP` | harness | legacy_lp | a seed number | Seed whose generated LP the singleton-equality fuzz test dumps to stderr before checking it. rusolve-lp unit test only; never read by a shipped solve. |
 | `RUSOLVE_VUBEQ_FUZZ_SEEDS` | harness | legacy_lp | a seed count (default 400) | How many random LPs with an appended singleton-cost row the singleton-equality fuzz test checks against presolve off. rusolve-lp unit test only; never read by a shipped solve. |
 | `RUSOLVE_VUBEQ_FUZZ_VERBOSE` | harness | legacy_lp | set = on | Prints each seed as the singleton-equality fuzz test runs it, so a failure names its seed. rusolve-lp unit test only; never read by a shipped solve. |

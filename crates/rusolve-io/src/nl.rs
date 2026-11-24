@@ -676,6 +676,7 @@ pub fn read_nl(bytes: &[u8], names: &NlNames) -> Result<Model, NlError> {
         hessian: Vec::new(),
         gc: Default::default(),
         conic: Default::default(),
+        cp: Default::default(),
     })
 }
 

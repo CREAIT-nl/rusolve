@@ -17,7 +17,10 @@ The layout follows rustc's diagnostics (https://rustc-dev-guide.rust-lang.org/di
 Hierarchy (the model errors are also `ValueError`/`IndexError`, as before these classes existed):
 
     RusolveError
-    +-- ModelError (ValueError)        RS4001 invalid argument, RS4003 mixed models
+    +-- ModelError (ValueError)        RS4001 invalid argument, RS4003 mixed models,
+    |                                  RS4009 invalid general constraint, RS4010 call refuses them,
+    |                                  RS4011 invalid CP object, RS4012 call refuses them,
+    |                                  RS4013 the MIP fallback cannot take a CP object
     |   +-- ModelIndexError (IndexError)   RS4002
     +-- SolveError
         +-- InfeasibleError            RS4004

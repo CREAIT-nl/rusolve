@@ -1116,6 +1116,13 @@ pub static COMMANDS: &[Command] = &[
         output_schema: None,
     },
     Command {
+        name: "version",
+        summary: "print the solver version and whether the CP-SAT engine's OR-Tools library is installed (no solve)",
+        positionals: &[],
+        flags: &[FORMAT_TEXT_JSON],
+        output_schema: None,
+    },
+    Command {
         name: "mcp",
         summary: "Model Context Protocol server over stdio",
         positionals: &[],

@@ -209,6 +209,16 @@ impl HEkkDual {
     /// initialiseInstanceParallel(simplex); }`
     pub fn new(ekk: &mut HEkk) -> Self {
         let mut dual = HEkkDual::default();
+        // PORT NOTE (perf): the seven local vectors take recycled storage (HVectorPool):
+        // each equals `HVector::default()`, so `initialise_instance` sets them up to exactly
+        // the values fresh members get. `recycle` hands them back after the solve.
+        dual.row_ep = ekk.hvector_pool_.take();
+        dual.row_ap = ekk.hvector_pool_.take();
+        dual.col_aq = ekk.hvector_pool_.take();
+        dual.col_bfrt = ekk.hvector_pool_.take();
+        dual.col_dse = ekk.hvector_pool_.take();
+        dual.dev_row_ep = ekk.hvector_pool_.take();
+        dual.dev_col_dse = ekk.hvector_pool_.take();
         dual.initialise_instance(ekk);
         dual.dual_row.setup(ekk);
         dual.dual_rhs.setup(ekk);
@@ -216,5 +226,19 @@ impl HEkkDual {
             dual.initialise_instance_parallel(ekk);
         }
         dual
+    }
+
+    /// Not in HiGHS (perf only): returns the local vectors taken in `new` to
+    /// `ekk.hvector_pool_` once the solver is finished with them. Dropping the solver
+    /// instead (as C++ does at end of scope) is equally correct, only slower.
+    pub fn recycle(mut self, ekk: &mut HEkk) {
+        let pool = &mut ekk.hvector_pool_;
+        pool.give(std::mem::take(&mut self.row_ep));
+        pool.give(std::mem::take(&mut self.row_ap));
+        pool.give(std::mem::take(&mut self.col_aq));
+        pool.give(std::mem::take(&mut self.col_bfrt));
+        pool.give(std::mem::take(&mut self.col_dse));
+        pool.give(std::mem::take(&mut self.dev_row_ep));
+        pool.give(std::mem::take(&mut self.dev_col_dse));
     }
 }

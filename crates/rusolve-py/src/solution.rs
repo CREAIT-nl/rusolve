@@ -35,6 +35,12 @@ pub struct Solution {
     pub(crate) names: std::sync::Arc<Vec<String>>,
     /// The model has a quadratic objective: the LP-only ray is not a ray of the QP, so no RS2011.
     pub(crate) quad: bool,
+    /// The `general_constraints` object of the solve (objects, routes, violations, `verified`),
+    /// present when the model has indicator, SOS, piecewise-linear or function constraints.
+    pub(crate) gc_report: Option<serde_json::Value>,
+    /// The `cp` object of the solve (engine, objects, routes, violations, `verified`), present when
+    /// the model has scheduling or combinatorial objects.
+    pub(crate) cp_report: Option<serde_json::Value>,
     /// The model as solved, kept only for an infeasible or unbounded verdict: `raise_for_status`
     /// computes the infeasible set or the ray from it, at raise time and not on every solve.
     pub(crate) lp: Option<std::sync::Arc<rusolve_ekk::prelude::HighsLp>>,
@@ -72,8 +78,15 @@ impl Solution {
         } else {
             None
         };
-        rusolve_cli::api::envelope_value(&env.envelope(), &self.names, values)
-            .map_err(crate::diag::model_err)
+        let mut v = rusolve_cli::api::envelope_value(&env.envelope(), &self.names, values)
+            .map_err(crate::diag::model_err)?;
+        if let Some(r) = &self.gc_report {
+            v["general_constraints"] = r.clone();
+        }
+        if let Some(r) = &self.cp_report {
+            v["cp"] = r.clone();
+        }
+        Ok(v)
     }
 
     fn array(&self, py: Python<'_>, k: usize, v: &Option<Vec<f64>>) -> PyResult<Py<PyAny>> {
@@ -228,6 +241,34 @@ impl Solution {
     #[getter]
     fn reduced_costs(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
         self.array(py, 3, &self.reduced_costs)
+    }
+    /// For a model with general constraints: `{"objects", "routes", "added_columns",
+    /// "added_rows", "violations", "verified"}`, checked on your objects (not on the generated
+    /// rows). None for a model without them.
+    #[getter]
+    fn general_constraints(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
+        match &self.gc_report {
+            None => Ok(py.None()),
+            Some(v) => {
+                let text =
+                    serde_json::to_string(v).map_err(|e| crate::diag::model_err(e.to_string()))?;
+                Ok(py.import("json")?.call_method1("loads", (text,))?.unbind())
+            }
+        }
+    }
+    /// For a model with scheduling or combinatorial objects: `{"engine", "objects", "checked",
+    /// "violations", "verified", "routes", ...}`, checked on your objects (not on the generated
+    /// rows). None for a model without them.
+    #[getter]
+    fn cp(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
+        match &self.cp_report {
+            None => Ok(py.None()),
+            Some(v) => {
+                let text =
+                    serde_json::to_string(v).map_err(|e| crate::diag::model_err(e.to_string()))?;
+                Ok(py.import("json")?.call_method1("loads", (text,))?.unbind())
+            }
+        }
     }
     #[getter]
     fn nodes(&self) -> i64 {

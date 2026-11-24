@@ -682,6 +682,16 @@ impl ModelBuilder {
         self.col_upper[i] = upper;
         Ok(())
     }
+    /// `(lower, upper, integer)` of an unsynced column; `None` for a synced or missing one
+    /// (the solver holds those).
+    pub fn unsynced_col_info(&self, col: usize) -> Option<(f64, f64, bool)> {
+        let i = col.checked_sub(self.synced_cols)?;
+        Some((
+            *self.col_lower.get(i)?,
+            *self.col_upper.get(i)?,
+            *self.col_integer.get(i)?,
+        ))
+    }
     pub fn set_col_cost(&mut self, col: usize, cost: f64) -> Result<(), BuildError> {
         let i = self.check_unsynced_col(col)?;
         if !cost.is_finite() {

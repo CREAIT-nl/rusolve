@@ -238,7 +238,8 @@ impl HEkk {
         let num_row = self.lp_.num_row_;
         let num_col = self.lp_.num_col_;
         // Setup a local buffer for the values of basic variables
-        let mut primal_col = HVector::default();
+        // PORT NOTE (perf): recycled storage, same values as a fresh vector (HVectorPool).
+        let mut primal_col = self.hvector_pool_.take();
         primal_col.setup(num_row);
         primal_col.clear();
         for i in 0..num_col + num_row {
@@ -276,6 +277,7 @@ impl HEkk {
             self.info_.base_lower_[i] = self.info_.work_lower_[i_col];
             self.info_.base_upper_[i] = self.info_.work_upper_[i_col];
         }
+        self.hvector_pool_.give(primal_col);
         // Indicate that the primal infeasibility information isn't known
         self.info_.num_primal_infeasibilities = kHighsIllegalInfeasibilityCount;
         self.info_.max_primal_infeasibility = kHighsIllegalInfeasibilityMeasure;
@@ -288,7 +290,8 @@ impl HEkk {
     pub fn compute_dual(&mut self) {
         self.analysis_.simplex_timer_start(ComputeDualClock, 0);
         // Create a local buffer for the pi vector
-        let mut dual_col = HVector::default();
+        // PORT NOTE (perf): recycled storage, same values as a fresh vector (HVectorPool).
+        let mut dual_col = self.hvector_pool_.take();
         dual_col.setup(self.lp_.num_row_);
         dual_col.clear();
         for i_row in 0..self.lp_.num_row_ {
@@ -326,7 +329,7 @@ impl HEkk {
         if dual_col.count != 0 {
             self.full_btran(&mut dual_col);
             // Create a local buffer for the values of reduced costs
-            let mut dual_row = HVector::default();
+            let mut dual_row = self.hvector_pool_.take();
             dual_row.setup(self.lp_.num_col_);
             self.full_price(&dual_col, &mut dual_row);
             let num_col = self.lp_.num_col_ as usize;
@@ -347,7 +350,9 @@ impl HEkk {
                 self.debug_compute_dual(false);
                 self.debug_simplex_dual_infeasible("(new duals)", true);
             }
+            self.hvector_pool_.give(dual_row);
         }
+        self.hvector_pool_.give(dual_col);
         // Indicate that the dual infeasibility information isn't known
         self.info_.num_dual_infeasibilities = kHighsIllegalInfeasibilityCount;
         self.info_.max_dual_infeasibility = kHighsIllegalInfeasibilityMeasure;

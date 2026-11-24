@@ -22,6 +22,8 @@ mod cli_core;
 mod commands;
 mod conic_solve;
 mod convert;
+pub mod cp_solve;
+mod cpsat_solve;
 mod diag;
 mod diagnose;
 mod ekk;
@@ -32,13 +34,15 @@ mod explain;
 mod explain_mip;
 mod feasrelax;
 mod features;
-mod gc_solve;
+pub mod gc_solve;
 mod lint;
 mod mcp;
 mod mcp_build;
 mod mcp_resources;
 mod mcp_tools;
 mod mip_highs;
+mod miqp_solve;
+mod misocp_solve;
 mod options_cmd;
 mod profile;
 mod progress;
@@ -119,8 +123,17 @@ fn run_legacy(args: &[String]) -> ExitCode {
         eprint!("{}", commands::usage_text());
         return ExitCode::from(2);
     };
+    // `--version` and `-V` are the `version` command spelled as flags
+    let cmd = if matches!(cmd.as_str(), "--version" | "-V") {
+        &"version".to_string()
+    } else {
+        cmd
+    };
     if cmd == "env" {
         return run_env(&args.map(|a| a.to_string()).collect::<Vec<_>>());
+    }
+    if cmd == "version" {
+        return run_version(&args.map(|a| a.to_string()).collect::<Vec<_>>());
     }
     if cmd == "dump" {
         let Some(path) = args.next() else {
@@ -663,6 +676,59 @@ fn use_ekk_engine(flags: &[String]) -> bool {
 
 /// `rusolve env [--json]`: every environment variable the solver reads,
 /// with what honours it and what its values mean.
+/// `rusolve version [--format text|json]`: the solver's version and what is installed next to it
+/// that an agent may want to select (today the OR-Tools library for `mip_engine=cpsat`: whether
+/// it loads, from where, which version, the places searched), without solving anything.
+fn run_version(args: &[String]) -> ExitCode {
+    let json = diag::wants_json(args);
+    let mut it = args.iter();
+    while let Some(a) = it.next() {
+        match a.as_str() {
+            "--format" => {
+                if !matches!(it.next().map(String::as_str), Some("text" | "json")) {
+                    eprintln!("rusolve version: --format needs text or json");
+                    return ExitCode::from(2);
+                }
+            }
+            "--format=text" | "--format=json" => {}
+            other => {
+                eprintln!("rusolve version: unknown argument '{other}' (only --format text|json)");
+                return ExitCode::from(2);
+            }
+        }
+    }
+    let cpsat = cpsat_solve::availability_json();
+    let git = option_env!("RUSOLVE_GIT");
+    if json {
+        let doc = serde_json::json!({
+            "name": "rusolve",
+            "version": env!("CARGO_PKG_VERSION"),
+            "git": git,
+            "cpsat": cpsat,
+        });
+        println!("{doc}");
+    } else {
+        println!(
+            "rusolve {} {}",
+            env!("CARGO_PKG_VERSION"),
+            git.unwrap_or("")
+        );
+        if cpsat["available"] == true {
+            println!(
+                "cpsat: available, OR-Tools {} at {}",
+                cpsat["version"].as_str().unwrap_or("unknown"),
+                cpsat["library"].as_str().unwrap_or("?")
+            );
+        } else {
+            println!(
+                "cpsat: not available (mip_engine=cpsat needs OR-Tools). {}",
+                cpsat["error"].as_str().unwrap_or("")
+            );
+        }
+    }
+    ExitCode::SUCCESS
+}
+
 fn run_env(args: &[String]) -> ExitCode {
     for flag in args {
         if flag != "--json" {

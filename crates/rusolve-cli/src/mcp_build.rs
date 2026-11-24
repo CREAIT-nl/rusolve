@@ -380,6 +380,306 @@ pub fn to_mps(args: &Args) -> Result<String, String> {
     Ok(s)
 }
 
+/// An entry of a `cp` list with its name.
+type NamedEntry<'a> = (String, &'a Map<String, Value>);
+
+/// The `cp` section of a `build_model` argument object: scheduling and combinatorial objects
+/// over the declared variables (named by string). No file format carries them, so the handle
+/// keeps the parsed [`rusolve_io::CpModel`] next to the model it writes.
+///
+/// ```json
+/// "cp": {
+///   "intervals":     [{"name": "a", "start": "s_a", "size": 3, "end": "e_a", "presence": "p_a"}],
+///   "no_overlap":    [{"name": "m1", "intervals": ["a", "b"]}],
+///   "cumulative":    [{"name": "crew", "intervals": ["a", "b"], "demands": [2, 1], "capacity": 3}],
+///   "all_different": [{"name": "d", "variables": ["x", "y"]}],
+///   "element":       [{"name": "e", "index": "i", "values": [4, "x", 7], "target": "t"}],
+///   "table":         [{"name": "t", "variables": ["x", "y"], "tuples": [[0, 1], [1, 0]], "negated": false}]
+/// }
+/// ```
+/// `size`, `demands`, `values` and `capacity` take a number or a variable name; `presence` is
+/// optional. Every error names its JSON path (`cp.no_overlap[0].intervals[2]`).
+pub fn parse_cp(args: &Args) -> Result<Option<rusolve_io::CpModel>, String> {
+    use rusolve_io::{
+        AllDifferent, CpModel, CpTerm, Cumulative, Element, Interval, NoOverlap, Table,
+    };
+    let Some(cp) = args.get("cp") else {
+        return Ok(None);
+    };
+    let Some(cp) = cp.as_object() else {
+        return Err(path_err(
+            "cp",
+            "must be an object with intervals, no_overlap, cumulative, all_different, element, table",
+        ));
+    };
+    const SECTIONS: [&str; 6] = [
+        "intervals",
+        "no_overlap",
+        "cumulative",
+        "all_different",
+        "element",
+        "table",
+    ];
+    if let Some(k) = cp.keys().find(|k| !SECTIONS.contains(&k.as_str())) {
+        return Err(path_err(
+            &format!("cp.{k}"),
+            format!("unknown section; the sections are {}", SECTIONS.join(", ")),
+        ));
+    }
+    let mut index: HashMap<String, usize> = HashMap::new();
+    for (i, v) in args
+        .get("variables")
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .enumerate()
+    {
+        if let Some(n) = v.get("name").and_then(Value::as_str) {
+            index.insert(n.to_string(), i);
+        }
+    }
+    let list = |key: &str| -> Result<Vec<NamedEntry<'_>>, String> {
+        let Some(v) = cp.get(key) else {
+            return Ok(Vec::new());
+        };
+        let Some(a) = v.as_array() else {
+            return Err(path_err(&format!("cp.{key}"), "must be an array"));
+        };
+        a.iter()
+            .enumerate()
+            .map(|(i, o)| {
+                let at = format!("cp.{key}[{i}]");
+                let o = o
+                    .as_object()
+                    .ok_or_else(|| path_err(&at, "must be an object"))?;
+                Ok((at, o))
+            })
+            .collect()
+    };
+    let var = |o: &Map<String, Value>, key: &str, at: &str| -> Result<usize, String> {
+        let Some(n) = o.get(key).and_then(Value::as_str) else {
+            return Err(path_err(
+                &format!("{at}.{key}"),
+                "is required (a variable name)",
+            ));
+        };
+        index
+            .get(n)
+            .copied()
+            .ok_or_else(|| path_err(&format!("{at}.{key}"), format!("no variable named '{n}'")))
+    };
+    let var_at = |v: &Value, at: &str| -> Result<usize, String> {
+        let n = v
+            .as_str()
+            .ok_or_else(|| path_err(at, "must be a variable name"))?;
+        index
+            .get(n)
+            .copied()
+            .ok_or_else(|| path_err(at, format!("no variable named '{n}'")))
+    };
+    let term = |v: &Value, at: &str| -> Result<CpTerm, String> {
+        match v {
+            Value::String(n) => index
+                .get(n.as_str())
+                .map(|&j| CpTerm::Col(j))
+                .ok_or_else(|| path_err(at, format!("no variable named '{n}'"))),
+            Value::Number(x) => x
+                .as_i64()
+                .map(CpTerm::Const)
+                .ok_or_else(|| path_err(at, "must be an integer or a variable name")),
+            _ => Err(path_err(at, "must be an integer or a variable name")),
+        }
+    };
+    let term_of = |o: &Map<String, Value>, key: &str, at: &str| -> Result<CpTerm, String> {
+        match o.get(key) {
+            Some(v) => term(v, &format!("{at}.{key}")),
+            None => Err(path_err(
+                &format!("{at}.{key}"),
+                "is required (an integer or a variable name)",
+            )),
+        }
+    };
+    let array_of = |o: &Map<String, Value>, key: &str, at: &str| -> Result<Vec<Value>, String> {
+        o.get(key)
+            .and_then(Value::as_array)
+            .cloned()
+            .ok_or_else(|| path_err(&format!("{at}.{key}"), "is required (an array)"))
+    };
+    let mut out = CpModel::default();
+    let mut interval_ix: HashMap<String, usize> = HashMap::new();
+    for (at, o) in list("intervals")? {
+        let name = name_of(o, &at)?;
+        if interval_ix
+            .insert(name.clone(), out.intervals.len())
+            .is_some()
+        {
+            return Err(path_err(&at, format!("duplicate interval name '{name}'")));
+        }
+        let presence = match o.get("presence") {
+            None | Some(Value::Null) => None,
+            Some(_) => Some(var(o, "presence", &at)?),
+        };
+        out.intervals.push(Interval {
+            name,
+            start: var(o, "start", &at)?,
+            size: term_of(o, "size", &at)?,
+            end: var(o, "end", &at)?,
+            presence,
+        });
+    }
+    let ivs = |o: &Map<String, Value>, at: &str| -> Result<Vec<usize>, String> {
+        array_of(o, "intervals", at)?
+            .iter()
+            .enumerate()
+            .map(|(k, v)| {
+                let here = format!("{at}.intervals[{k}]");
+                let n = v
+                    .as_str()
+                    .ok_or_else(|| path_err(&here, "must be an interval name"))?;
+                interval_ix
+                    .get(n)
+                    .copied()
+                    .ok_or_else(|| path_err(&here, format!("no interval named '{n}'")))
+            })
+            .collect()
+    };
+    for (at, o) in list("no_overlap")? {
+        out.no_overlap.push(NoOverlap {
+            name: name_of(o, &at)?,
+            intervals: ivs(o, &at)?,
+        });
+    }
+    for (at, o) in list("cumulative")? {
+        let intervals = ivs(o, &at)?;
+        let demands = array_of(o, "demands", &at)?
+            .iter()
+            .enumerate()
+            .map(|(k, v)| term(v, &format!("{at}.demands[{k}]")))
+            .collect::<Result<Vec<_>, _>>()?;
+        if demands.len() != intervals.len() {
+            return Err(path_err(
+                &format!("{at}.demands"),
+                format!(
+                    "has {} entries but intervals has {}; one demand per interval",
+                    demands.len(),
+                    intervals.len()
+                ),
+            ));
+        }
+        out.cumulative.push(Cumulative {
+            name: name_of(o, &at)?,
+            intervals,
+            demands,
+            capacity: term_of(o, "capacity", &at)?,
+        });
+    }
+    for (at, o) in list("all_different")? {
+        let cols = array_of(o, "variables", &at)?
+            .iter()
+            .enumerate()
+            .map(|(k, v)| var_at(v, &format!("{at}.variables[{k}]")))
+            .collect::<Result<Vec<_>, _>>()?;
+        out.all_different.push(AllDifferent {
+            name: name_of(o, &at)?,
+            cols,
+        });
+    }
+    for (at, o) in list("element")? {
+        let values = array_of(o, "values", &at)?
+            .iter()
+            .enumerate()
+            .map(|(k, v)| term(v, &format!("{at}.values[{k}]")))
+            .collect::<Result<Vec<_>, _>>()?;
+        out.element.push(Element {
+            name: name_of(o, &at)?,
+            index: var(o, "index", &at)?,
+            values,
+            target: var(o, "target", &at)?,
+        });
+    }
+    for (at, o) in list("table")? {
+        let cols = array_of(o, "variables", &at)?
+            .iter()
+            .enumerate()
+            .map(|(k, v)| var_at(v, &format!("{at}.variables[{k}]")))
+            .collect::<Result<Vec<_>, _>>()?;
+        let mut tuples = Vec::new();
+        for (r, row) in array_of(o, "tuples", &at)?.iter().enumerate() {
+            let here = format!("{at}.tuples[{r}]");
+            let row = row
+                .as_array()
+                .ok_or_else(|| path_err(&here, "must be an array of integers"))?;
+            if row.len() != cols.len() {
+                return Err(path_err(
+                    &here,
+                    format!(
+                        "has {} values but the table has {} variables",
+                        row.len(),
+                        cols.len()
+                    ),
+                ));
+            }
+            tuples.push(
+                row.iter()
+                    .enumerate()
+                    .map(|(k, v)| {
+                        v.as_i64()
+                            .ok_or_else(|| path_err(&format!("{here}[{k}]"), "must be an integer"))
+                    })
+                    .collect::<Result<Vec<_>, _>>()?,
+            );
+        }
+        let negated = match o.get("negated") {
+            None => false,
+            Some(v) => v
+                .as_bool()
+                .ok_or_else(|| path_err(&format!("{at}.negated"), "must be true or false"))?,
+        };
+        out.table.push(Table {
+            name: name_of(o, &at)?,
+            cols,
+            tuples,
+            negated,
+        });
+    }
+    Ok(Some(out))
+}
+
+/// The JSON path of the `cp` entry a [`rusolve_io::CpError`] names (`interval 'a'` becomes
+/// `cp.intervals[0]`), so a validation error points at its entry like a parse error does.
+pub fn cp_error_path(cp: &rusolve_io::CpModel, object: &str) -> Option<String> {
+    let (kind, rest) = object.split_once(" '")?;
+    let name = rest.strip_suffix('\'')?;
+    let (section, names): (&str, Vec<&str>) = match kind {
+        "interval" => (
+            "intervals",
+            cp.intervals.iter().map(|o| o.name.as_str()).collect(),
+        ),
+        "no_overlap" => (
+            "no_overlap",
+            cp.no_overlap.iter().map(|o| o.name.as_str()).collect(),
+        ),
+        "cumulative" => (
+            "cumulative",
+            cp.cumulative.iter().map(|o| o.name.as_str()).collect(),
+        ),
+        "all_different" => (
+            "all_different",
+            cp.all_different.iter().map(|o| o.name.as_str()).collect(),
+        ),
+        "element" => (
+            "element",
+            cp.element.iter().map(|o| o.name.as_str()).collect(),
+        ),
+        "table" => ("table", cp.table.iter().map(|o| o.name.as_str()).collect()),
+        _ => return None,
+    };
+    names
+        .iter()
+        .position(|n| *n == name)
+        .map(|i| format!("cp.{section}[{i}]"))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -419,5 +719,59 @@ mod tests {
         );
         let e = to_mps(&args(json!({"variables": [{"name": "x y"}]}))).unwrap_err();
         assert!(e.starts_with("variables[0]:"), "{e}");
+    }
+
+    #[test]
+    fn cp_section_parses_and_errors_name_the_path() {
+        let a = args(json!({
+            "variables": [
+                {"name": "s1", "type": "integer", "upper": 9},
+                {"name": "e1", "type": "integer", "upper": 9},
+                {"name": "s2", "type": "integer", "upper": 9},
+                {"name": "e2", "type": "integer", "upper": 9}
+            ],
+            "cp": {
+                "intervals": [
+                    {"name": "a", "start": "s1", "size": 2, "end": "e1"},
+                    {"name": "b", "start": "s2", "size": "s1", "end": "e2"}
+                ],
+                "no_overlap": [{"name": "m", "intervals": ["a", "b"]}],
+                "cumulative": [{"name": "c", "intervals": ["a", "b"], "demands": [1, 2], "capacity": 2}]
+            }
+        }));
+        let cp = parse_cp(&a).unwrap().unwrap();
+        assert_eq!(
+            (cp.intervals.len(), cp.no_overlap.len(), cp.cumulative.len()),
+            (2, 1, 1)
+        );
+        assert_eq!(parse_cp(&args(json!({"variables": []}))).unwrap(), None);
+        let mut bad = a.clone();
+        bad["cp"]["no_overlap"][0]["intervals"][1] = json!("zz");
+        let e = parse_cp(&bad).unwrap_err();
+        assert!(
+            e.starts_with("cp.no_overlap[0].intervals[1]:") && e.contains("zz"),
+            "{e}"
+        );
+        let mut bad = a.clone();
+        bad["cp"]["cumulative"][0]["demands"] = json!([1]);
+        assert!(
+            parse_cp(&bad)
+                .unwrap_err()
+                .starts_with("cp.cumulative[0].demands:")
+        );
+        let mut bad = a.clone();
+        bad["cp"]["intervals"][0]["end"] = json!("nope");
+        assert!(
+            parse_cp(&bad)
+                .unwrap_err()
+                .starts_with("cp.intervals[0].end:")
+        );
+        let mut bad = a;
+        bad["cp"]["bogus"] = json!([]);
+        assert!(parse_cp(&bad).unwrap_err().starts_with("cp.bogus:"));
+        assert_eq!(
+            cp_error_path(&cp, "interval 'b'").as_deref(),
+            Some("cp.intervals[1]")
+        );
     }
 }

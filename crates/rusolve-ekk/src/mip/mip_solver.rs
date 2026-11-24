@@ -5,6 +5,7 @@
 //! Part of the HiGHS MIP port.
 
 use crate::lp_data::presolve_support::is_basis_consistent;
+use crate::mip::search::plunge_levers_active;
 use crate::prelude::*;
 use crate::util::c_printf::c_fmt_g_width;
 use std::sync::Arc;
@@ -683,14 +684,16 @@ impl HighsMipSolver {
                     // rusolve mip_symmetry_dynamic: carry the branching path on the queue transfer
                     while self.mipdata_.workers[w].nodequeue.num_nodes() > 0 {
                         let node = self.mipdata_.workers[w].nodequeue.pop_best_node();
-                        if self.options_mip_.mip_symmetry_dynamic {
-                            let _ = self.mipdata_.nodequeue.emplace_node_s3(
+                        // rusolve mip_node_install_basis: and the parent basis
+                        if self.options_mip_.mip_symmetry_dynamic || node.basis.is_some() {
+                            let _ = self.mipdata_.nodequeue.emplace_node_ext(
                                 node.domchgstack,
                                 node.branchings,
                                 node.lower_bound,
                                 node.estimate,
                                 node.depth,
                                 node.s3_path,
+                                node.basis,
                             );
                         } else {
                             let _ = self.mipdata_.nodequeue.emplace_node(
@@ -1186,11 +1189,19 @@ impl HighsMipSolver {
         limit_reached: &mut bool,
         st: &mut RunState,
     ) {
+        // rusolve mip_plunge_bestbound_freq: the best-bound pick period (HiGHS: every 10th leaf)
+        let best_bound_freq = self.run_best_bound_freq();
         for &w in indices {
-            if (indices.len() == 1 && st.num_queue_leaves - st.last_lb_leave >= 10)
+            if (indices.len() == 1 && st.num_queue_leaves - st.last_lb_leave >= best_bound_freq)
                 || (indices.len() > 1 && w == 0)
             {
                 let node = self.mipdata_.nodequeue.pop_best_bound_node();
+                if crate::mip::search::tree_trace() {
+                    eprintln!(
+                        "TQ bb {} {} {}",
+                        node.lower_bound, node.estimate, node.depth
+                    );
+                }
                 HighsSearch::with_worker_search(self, w, |s, ctx| s.install_node(ctx, node));
                 st.last_lb_leave = st.num_queue_leaves;
             } else {
@@ -1202,6 +1213,15 @@ impl HighsMipSolver {
                     && next_node.domchgstack.len() as HighsInt == best_bound_node_stack_size
                 {
                     st.last_lb_leave = st.num_queue_leaves;
+                }
+                if crate::mip::search::tree_trace() {
+                    eprintln!(
+                        "TQ est {} {} {} {}",
+                        next_node.lower_bound,
+                        next_node.estimate,
+                        next_node.depth,
+                        best_bound_node_lb
+                    );
                 }
                 HighsSearch::with_worker_search(self, w, |s, ctx| s.install_node(ctx, next_node));
             }
@@ -1261,8 +1281,26 @@ impl HighsMipSolver {
 
     /// C++ `separateAndStoreBasis` (lambda in run()). Returns true when the node is done.
     fn run_separate_and_store_basis(&mut self, w: usize) -> bool {
-        if self.options_mip_.mip_allow_cut_separation_at_nodes {
+        // rusolve mip_node_sepa_maxbounddist / mip_node_sepa_freq: `NodeSepa::Full` unless set
+        let gate = if self.options_mip_.mip_allow_cut_separation_at_nodes {
+            self.node_sepa_gate(w)
+        } else {
+            NodeSepa::Skip
+        };
+        if gate == NodeSepa::Full {
             self.separate_at_node(w);
+        } else if gate == NodeSepa::PoolOnly {
+            self.mipdata_.workers[w]
+                .sepa_ptr_
+                .as_mut()
+                .unwrap()
+                .pool_only = true;
+            self.separate_at_node(w);
+            self.mipdata_.workers[w]
+                .sepa_ptr_
+                .as_mut()
+                .unwrap()
+                .pool_only = false;
         } else {
             let cp = self.mipdata_.workers[w].get_cut_pool();
             self.mipdata_.cutpools[cp].perform_aging();
@@ -1305,6 +1343,66 @@ impl HighsMipSolver {
         }
 
         false
+    }
+
+    /// rusolve: whether the tree node of worker `w` separates cuts (mip_node_sepa_maxbounddist,
+    /// mip_node_sepa_freq, mip_node_sepa_pool_only). With both gates at their defaults (1.0 and
+    /// 1) every node separates, as in HiGHS, and nothing below is read.
+    ///
+    /// The two rules are SCIP's per-separator gates in `SCIPsepaExecLP` (src/scip/sepa.c,
+    /// Apache-2.0): a separator runs at depth `d` only if `freq > 0 && d % freq == 0`, and only if
+    /// `bounddist <= maxbounddist`, where `priceAndCutLoop` (src/scip/solve.c) computes
+    /// `bounddist = (node lower bound - global lower bound) / (cutoff bound - global lower
+    /// bound)`. See also Achterberg, "Constraint Integer Programming" (PhD thesis, TU Berlin,
+    /// 2007), on separation in the tree. Here the gate applies to the whole node round, the
+    /// node bound is the node's LP bound after `evaluateNode`, the global bound is
+    /// `mipdata_.lower_bound` and the cutoff is `mipdata_.upper_limit`. Without an incumbent the
+    /// distance is 0, so every node passes the bound rule until a solution is known.
+    fn node_sepa_gate(&self, w: usize) -> NodeSepa {
+        let o = &self.options_mip_;
+        if o.mip_node_sepa_maxbounddist >= 1.0 && o.mip_node_sepa_freq <= 1 {
+            return NodeSepa::Full;
+        }
+        let search = self.run_worker_search(w);
+        let mut pass = true;
+        if o.mip_node_sepa_freq > 1 && search.get_current_depth() % o.mip_node_sepa_freq != 0 {
+            pass = false;
+        }
+        if pass && o.mip_node_sepa_maxbounddist < 1.0 {
+            let glb = self.mipdata_.lower_bound;
+            let cutoff = self.mipdata_.upper_limit;
+            let denom = cutoff - glb;
+            if cutoff < kHighsInf && denom > self.mipdata_.feastol {
+                let bounddist = (search.get_current_lower_bound() - glb) / denom;
+                pass = bounddist <= o.mip_node_sepa_maxbounddist;
+            }
+        }
+        if pass {
+            NodeSepa::Full
+        } else if o.mip_node_sepa_pool_only {
+            NodeSepa::PoolOnly
+        } else {
+            NodeSepa::Skip
+        }
+    }
+
+    /// rusolve `mip_plunge_max_nodes`: the node limit of one plunge (HiGHS: `plungeLimit`, 100),
+    /// lowered to the option value while `plunge_levers_active` holds. 0 = HiGHS.
+    fn run_plunge_limit(&self, plunge_limit: HighsInt) -> HighsInt {
+        match self.options_mip_.mip_plunge_max_nodes {
+            m if m > 0 && plunge_levers_active(self, false) => m,
+            _ => plunge_limit,
+        }
+    }
+
+    /// rusolve `mip_plunge_bestbound_freq`: a single worker takes the best-bound queue node once
+    /// this many queue picks have passed without one (HiGHS: 10), lowered to the option value
+    /// while `plunge_levers_active` holds. 0 = HiGHS.
+    fn run_best_bound_freq(&self) -> i64 {
+        match self.options_mip_.mip_plunge_bestbound_freq {
+            f if f > 0 && plunge_levers_active(self, false) => f as i64,
+            _ => 10,
+        }
     }
 
     /// C++ `backtrackPlunge` (lambda in run()). Returns true when the plunge must stop.
@@ -1431,6 +1529,11 @@ impl HighsMipSolver {
             if search_dive_result == HighsSearch_NodeResult::kSubOptimal {
                 return true;
             }
+            // rusolve mip_plunge_quot: the dive stopped at a child above the plunge bound, not at
+            // a leaf; end the plunge so the open nodes go to the queue.
+            if std::mem::take(&mut self.run_worker_search_mut(w).plunge_bound_stop) {
+                return true;
+            }
             *self.run_worker_search_mut(w).get_local_leaves() += 1;
         }
         node_lim != kHighsIInf && self.run_worker_search(w).nnodes >= dive_node_lim
@@ -1533,6 +1636,9 @@ impl HighsMipSolver {
             HighsLogType::kInfo,
             "\nRestarting search from the root node\n"
         );
+        if crate::mip::search::tree_trace() {
+            eprintln!("TR {:.3} {}", self.timer_.read(), self.mipdata_.num_nodes);
+        }
         self.perform_restart();
     }
 
@@ -1670,7 +1776,7 @@ impl HighsMipSolver {
             }
 
             if *self.run_worker_search_mut(w).get_local_nodes() + nodes_explored
-                >= plunge_limit as i64
+                >= self.run_plunge_limit(plunge_limit) as i64
             {
                 break;
             }
@@ -1877,24 +1983,27 @@ impl HighsMipSolver {
                 let processed = std::mem::take(&mut self.mipdata_.workers[w].processed_nodes);
                 for (node, count_tree_weight) in processed {
                     // rusolve mip_symmetry_dynamic: carry the branching path on the queue transfer
-                    let tmp_tree_weight = if self.options_mip_.mip_symmetry_dynamic {
-                        self.mipdata_.nodequeue.emplace_node_s3(
-                            node.domchgstack,
-                            node.branchings,
-                            node.lower_bound,
-                            node.estimate,
-                            node.depth,
-                            node.s3_path,
-                        )
-                    } else {
-                        self.mipdata_.nodequeue.emplace_node(
-                            node.domchgstack,
-                            node.branchings,
-                            node.lower_bound,
-                            node.estimate,
-                            node.depth,
-                        )
-                    };
+                    // rusolve mip_node_install_basis: and the parent basis
+                    let tmp_tree_weight =
+                        if self.options_mip_.mip_symmetry_dynamic || node.basis.is_some() {
+                            self.mipdata_.nodequeue.emplace_node_ext(
+                                node.domchgstack,
+                                node.branchings,
+                                node.lower_bound,
+                                node.estimate,
+                                node.depth,
+                                node.s3_path,
+                                node.basis,
+                            )
+                        } else {
+                            self.mipdata_.nodequeue.emplace_node(
+                                node.domchgstack,
+                                node.branchings,
+                                node.lower_bound,
+                                node.estimate,
+                                node.depth,
+                            )
+                        };
                     if count_tree_weight {
                         self.run_worker_search_mut(w).treeweight += tmp_tree_weight;
                     }
@@ -2032,12 +2141,20 @@ impl HighsMipSolver {
         } else {
             1
         };
+        // rusolve mip_plunge_bestbound_freq: the best-bound pick period (HiGHS: every 10th leaf)
+        let best_bound_freq = self.run_best_bound_freq();
         for j in 0..num_nodes_per_worker {
             for &i in indices {
-                if (indices.len() == 1 && st.num_queue_leaves - st.last_lb_leave >= 10)
+                if (indices.len() == 1 && st.num_queue_leaves - st.last_lb_leave >= best_bound_freq)
                     || (indices.len() > 1 && i == 0 && j == 0)
                 {
                     let node = self.mipdata_.nodequeue.pop_best_bound_node();
+                    if crate::mip::search::tree_trace() {
+                        eprintln!(
+                            "TQ bb {} {} {}",
+                            node.lower_bound, node.estimate, node.depth
+                        );
+                    }
                     self.mipdata_.workers[i].prepared_nodes.push(node);
                     st.last_lb_leave = st.num_queue_leaves;
                 } else {
@@ -2049,6 +2166,15 @@ impl HighsMipSolver {
                         && next_node.domchgstack.len() as HighsInt == best_bound_node_stack_size
                     {
                         st.last_lb_leave = st.num_queue_leaves;
+                    }
+                    if crate::mip::search::tree_trace() {
+                        eprintln!(
+                            "TQ est {} {} {} {}",
+                            next_node.lower_bound,
+                            next_node.estimate,
+                            next_node.depth,
+                            best_bound_node_lb
+                        );
                     }
                     self.mipdata_.workers[i].prepared_nodes.push(next_node);
                 }
@@ -2238,7 +2364,7 @@ impl HighsMipSolver {
                 let local_nodes = *self.run_worker_search_mut(w).get_local_nodes();
                 nodes_explored += local_nodes - last_local_node_count;
                 last_local_node_count = local_nodes;
-                if nodes_explored >= plunge_limit as i64 {
+                if nodes_explored >= self.run_plunge_limit(plunge_limit) as i64 {
                     break;
                 }
                 if self.run_backtrack_plunge(w) {
@@ -2563,6 +2689,17 @@ impl HighsObjectiveSolution {
     pub fn clear(&mut self) {
         self.col_value.clear();
     }
+}
+
+/// rusolve: what the tree-node separation gate (`HighsMipSolver::node_sepa_gate`) decides.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+enum NodeSepa {
+    /// The full HiGHS separation round.
+    Full,
+    /// mip_node_sepa_pool_only: propagation and violated cut-pool cuts only.
+    PoolOnly,
+    /// No separation; the cut pool ages, as with mip_allow_cut_separation_at_nodes=false.
+    Skip,
 }
 
 /// Outcome of the `runHeuristics` body before its final global-domain test.

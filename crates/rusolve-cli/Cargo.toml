@@ -36,6 +36,10 @@ sha2 = "0.10"
 # arXiv:2405.12762; Apache-2.0, see THIRD_PARTY_NOTICES.md)
 clarabel = "0.11.1"
 
+# CP-SAT engine (`mip_engine=cpsat`, docs/design/cpsat-engine.md). Always built: it needs no
+# OR-Tools at build time, the library is opened at run time when the engine is selected.
+rusolve-cpsat.workspace = true
+
 [dev-dependencies]
 # the envelope tests parse the CLI's stdout and the committed schema
 serde_json = "1"

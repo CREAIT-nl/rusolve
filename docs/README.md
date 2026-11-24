@@ -9,6 +9,7 @@
 | [`agent/diagnostics.md`](agent/diagnostics.md) | Every error and warning code, with fixes (generated; also `rusolve-cli --explain RSnnnn`) |
 | [`design/python-api.md`](design/python-api.md) | The Python `rusolve.Model` API |
 | [`design/diagnostics.md`](design/diagnostics.md) | The diagnostics contract: codes, JSON shape, exit codes |
+| [`design/install.md`](design/install.md) | `install.sh`: installing `rusolve-cli`, and OR-Tools for CP-SAT on request |
 | [`design/mcp.md`](design/mcp.md) | The MCP server (`rusolve-cli mcp`) and its tools |
 | [`design/hooks.md`](design/hooks.md), [`design/wasm-hooks.md`](design/wasm-hooks.md) | Custom cut separators, branching rules and node selectors, in Python or sandboxed WebAssembly |
 | [`schema/`](schema) | JSON Schemas for every `--format json` output |
@@ -19,7 +20,7 @@
 |---|---|
 | [`../llms.txt`](../llms.txt) | Short entry point for agents using rusolve |
 | [`skills/start-here`](skills/start-here/SKILL.md) | Classifies a problem and routes to a modelling playbook |
-| `skills/` playbooks | [solve](skills/solve/SKILL.md), [debug-infeasible](skills/debug-infeasible/SKILL.md), [tune](skills/tune/SKILL.md), [extend](skills/extend/SKILL.md), [assignment-transport-flow](skills/assignment-transport-flow/SKILL.md), [set-cover-packing](skills/set-cover-packing/SKILL.md), [facility-location](skills/facility-location/SKILL.md), [lot-sizing](skills/lot-sizing/SKILL.md), [scheduling](skills/scheduling/SKILL.md), [routing](skills/routing/SKILL.md), [piecewise-semi](skills/piecewise-semi/SKILL.md), [convex-qp](skills/convex-qp/SKILL.md) |
+| `skills/` playbooks | [solve](skills/solve/SKILL.md), [debug-infeasible](skills/debug-infeasible/SKILL.md), [tune](skills/tune/SKILL.md), [extend](skills/extend/SKILL.md), [assignment-transport-flow](skills/assignment-transport-flow/SKILL.md), [set-cover-packing](skills/set-cover-packing/SKILL.md), [facility-location](skills/facility-location/SKILL.md), [lot-sizing](skills/lot-sizing/SKILL.md), [scheduling](skills/scheduling/SKILL.md), [routing](skills/routing/SKILL.md), [piecewise-semi](skills/piecewise-semi/SKILL.md), [convex-qp](skills/convex-qp/SKILL.md), [conic](skills/conic/SKILL.md) |
 | [`../evals/`](../evals) | Tasks and graders that measure how well agents use rusolve |
 
 ## Contributing

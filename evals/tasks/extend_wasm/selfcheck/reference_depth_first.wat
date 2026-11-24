@@ -3,9 +3,10 @@
 ;; The reference rule: depth-first node selection. Of the open nodes the host offers, dive into
 ;; the deepest one, breaking ties by the better local estimate. Depth-first (dive-first) node
 ;; choice instead of pure best-bound is textbook branch-and-bound (Wolsey, "Mixed Integer
-;; Programming", Wiley 2020, ch. 11 "Branch-and-bound: depth-first search"; commercial solvers
+;; Programming", Wiley 2020, ch. 11 "Branch-and-bound: depth-first search"; most MIP solvers
 ;; mix a diving phase into best-bound for exactly this reason). On this instance it reaches the
-;; optimum in 534 nodes against 912 for the default best-bound pop: a dive finds a good
+;; optimum in 534 nodes against 912 for the best-bound pop under the HiGHS child rule
+;; (mip_child_selection=-1, the setting the grader uses): a dive finds a good
 ;; incumbent early, which prunes the rest of the tree.
 ;;
 ;; ABI v1 `select_node(n, in_ptr) -> i32`: the host writes n records of four f64 at in_ptr

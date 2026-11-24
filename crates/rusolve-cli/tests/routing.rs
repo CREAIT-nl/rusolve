@@ -206,11 +206,46 @@ fn nonconvex_qcqp_is_refused_by_both_commands() {
 #[test]
 fn miqp_is_refused_by_both_commands() {
     refuses_alike("miqp", MIQP, "miqp", None);
+    // the refusal names the experimental engine and the exact option, and why it is off
+    let r = run("mip", MIQP, "miqp_hint", &["--format", "json"]);
+    for needle in [
+        "--opt miqp_oa=true",
+        "experimental",
+        "off by default",
+        "slower",
+    ] {
+        assert!(r.stderr.contains(needle), "{needle}: {}", r.stderr);
+    }
+    assert!(
+        json(&r)["error"]["hint"]
+            .as_str()
+            .unwrap()
+            .contains("miqp_oa=true")
+    );
+    // a nonconvex Q has no lever to point to
+    let nonconvex = MIQP.replace("+ 2 y ^ 2", "+ - 2 y ^ 2");
+    let r = run("mip", &nonconvex, "miqp_nohint", &[]);
+    assert!(!r.stderr.contains("miqp_oa"), "{}", r.stderr);
 }
 
 #[test]
 fn mixed_integer_conic_is_refused_by_both_commands() {
     refuses_alike("miconic", MICONIC, "mi_conic", None);
+    let r = run("solve", MICONIC, "miconic_hint", &["--format", "json"]);
+    for needle in [
+        "--opt misocp_oa=true",
+        "experimental",
+        "off by default",
+        "slower",
+    ] {
+        assert!(r.stderr.contains(needle), "{needle}: {}", r.stderr);
+    }
+    assert!(
+        json(&r)["error"]["hint"]
+            .as_str()
+            .unwrap()
+            .contains("misocp_oa=true")
+    );
 }
 
 #[test]
@@ -305,4 +340,127 @@ fn flags_a_class_cannot_honour_are_usage_errors() {
     assert_eq!(r.code, 2, "{}", r.stderr);
     let r = run("solve", GC_MIP, "gc_flags", &["--duals"]);
     assert_eq!(r.code, 2, "{}", r.stderr);
+}
+
+/// Convex MIQP with the `miqp_oa` lever: solved by outer approximation, class `miqp`, engine
+/// `oa`, and the answer passes `rusolve check`.
+#[test]
+fn convex_miqp_with_the_lever_solves_and_checks() {
+    let sol = std::env::temp_dir().join(format!("rusolve-routing-{}-oa.sol", std::process::id()));
+    let sol_arg = sol.to_string_lossy().into_owned();
+    let r = run(
+        "mip",
+        MIQP,
+        "miqp_oa_on",
+        &[
+            "--opt",
+            "miqp_oa=true",
+            "--format",
+            "json",
+            "--solution-file",
+            &sol_arg,
+        ],
+    );
+    assert_eq!(r.code, 0, "{}\n{}", r.stdout, r.stderr);
+    let v = json(&r);
+    assert_eq!(v["class"], "miqp");
+    assert_eq!(v["engine"], "oa");
+    assert_eq!(v["convexity"], "convex");
+    assert_eq!(v["miqp_oa"]["engine"], "oa");
+    // x integer, y continuous, x + y <= 1.5: both x = 0 and x = 1 give -0.25
+    let obj = v["objective"].as_f64().unwrap();
+    assert!((obj + 0.25).abs() < 1e-4, "objective {obj}");
+    let model = std::env::temp_dir()
+        .join(format!("rusolve-routing-{}", std::process::id()))
+        .join("miqp_oa_on.lp");
+    let c = Command::new(env!("CARGO_BIN_EXE_rusolve-cli"))
+        .arg("check")
+        .arg(&model)
+        .arg(&sol)
+        .args(["--format", "json"])
+        .output()
+        .unwrap();
+    let cv: Value = serde_json::from_slice(&c.stdout).unwrap();
+    assert_eq!(cv["verdict"], "feasible", "{cv}");
+    assert!((cv["objective"]["value"].as_f64().unwrap() - obj).abs() < 1e-6);
+}
+
+/// Without the lever the convex MIQP is refused as before; a nonconvex Q with an integer column
+/// stays refused even with the lever on.
+#[test]
+fn miqp_oa_lever_off_or_nonconvex_is_still_refused() {
+    let r = run("mip", MIQP, "miqp_oa_off", &["--opt", "miqp_oa=false"]);
+    assert_eq!(r.code, 3, "{}\n{}", r.stdout, r.stderr);
+    let nonconvex = MIQP.replace("+ 2 y ^ 2", "+ - 2 y ^ 2");
+    let r = run(
+        "mip",
+        &nonconvex,
+        "miqp_oa_nonconvex",
+        &["--opt", "miqp_oa=true"],
+    );
+    assert_eq!(r.code, 3, "{}\n{}", r.stdout, r.stderr);
+}
+
+/// Mixed-integer conic model with the `misocp_oa` lever: solved by outer approximation, class
+/// `mi_conic`, engine `oa`, and the answer passes `rusolve check`.
+#[test]
+fn mixed_integer_conic_with_the_lever_solves_and_checks() {
+    let sol = std::env::temp_dir().join(format!("rusolve-routing-{}-soc.json", std::process::id()));
+    let sol_arg = sol.to_string_lossy().into_owned();
+    let r = run(
+        "mip",
+        MICONIC,
+        "misocp_oa_on",
+        &[
+            "--opt",
+            "misocp_oa=true",
+            "--format",
+            "json",
+            "--solution-file",
+            &sol_arg,
+        ],
+    );
+    assert_eq!(r.code, 0, "{}\n{}", r.stdout, r.stderr);
+    let v = json(&r);
+    assert_eq!(v["class"], "mi_conic");
+    assert_eq!(v["engine"], "oa");
+    assert_eq!(v["convexity"], "convex");
+    assert_eq!(v["status"], "Optimal", "{v}");
+    // x integer in the unit disc: x = 0, y = 1 or x = 1, y = 0 give -1
+    let obj = v["objective"].as_f64().unwrap();
+    assert!((obj + 1.0).abs() < 1e-4, "objective {obj}");
+    let model = std::env::temp_dir()
+        .join(format!("rusolve-routing-{}", std::process::id()))
+        .join("misocp_oa_on.lp");
+    let c = Command::new(env!("CARGO_BIN_EXE_rusolve-cli"))
+        .arg("check")
+        .arg(&model)
+        .arg(&sol)
+        .args(["--format", "json"])
+        .output()
+        .unwrap();
+    let cv: Value = serde_json::from_slice(&c.stdout).unwrap();
+    assert_eq!(cv["verdict"], "feasible", "{cv}");
+    assert!((cv["objective"]["value"].as_f64().unwrap() - obj).abs() < 1e-6);
+}
+
+/// Without the lever the model is refused as before; a nonconvex quadratic row with an integer
+/// column stays refused even with the lever on.
+#[test]
+fn misocp_oa_lever_off_or_nonconvex_is_still_refused() {
+    let r = run(
+        "mip",
+        MICONIC,
+        "misocp_oa_off",
+        &["--opt", "misocp_oa=false"],
+    );
+    assert_eq!(r.code, 3, "{}\n{}", r.stdout, r.stderr);
+    let nonconvex = MICONIC.replace("<= 1", ">= 1");
+    let r = run(
+        "mip",
+        &nonconvex,
+        "misocp_oa_nonconvex",
+        &["--opt", "misocp_oa=true"],
+    );
+    assert_eq!(r.code, 3, "{}\n{}", r.stdout, r.stderr);
 }
